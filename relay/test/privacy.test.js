@@ -25,7 +25,7 @@ test('the privacy sample breaks rule 1', () => {
 });
 
 test('rule 1: paths', () => {
-  for (const s of ['C:\\x', 'see d:/data', '\\\\server\\share', '/home/a', '/Users/a', '/root/x', '~/x', '~\\x']) {
+  for (const s of ['C:\\x', 'see d:/data', '\\\\server\\share', '/home/$USER', '/Users/a', '/root/x', '~/x', '~\\x']) {
     assert.equal(stringRule(s), 1, s);
   }
   for (const s of ['https://github.com/x', 'skellycertify.report/1.0.0', 'tree clean; Python 3.13.18', '10de:2484', '/opt/x']) {
