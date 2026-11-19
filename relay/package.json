@@ -1,0 +1,16 @@
+{
+  "name": "skellycertify-relay",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Cloudflare Worker that files certify reports in domisjustanumber/skellycertify.",
+  "license": "AGPL-3.0-or-later",
+  "type": "module",
+  "scripts": {
+    "test": "node --test",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "4.157.0"
+  }
+}

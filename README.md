@@ -6,16 +6,23 @@ execution provider, which camera works, and what failed.
 The project has only a few computers to test on. Your report helps the project support your
 hardware.
 
-This repository runs nothing. It holds no test code.
+This repository holds no test code.
 The tests are in each freemocap package, for example skellytracker and skellycam.
+The repository holds one small program: the relay in [relay/](relay/README.md). The relay files a
+report that the app sends. It runs no test.
 
 ## Who sends what
 
 - **You** run a certification in the freemocap app, or in the clone of one package.
   The run writes one report file. The run sends nothing. When the interface of the app and its
-  backend are on different computers, the backend returns the file as it is. The interface saves
-  the file and opens the issue form. Nothing is sent automatically.
-- **You** send the report file to this repository as a GitHub issue.
+  backend are on different computers, the backend returns the file as it is.
+- **You** send the report file to this repository in one of two ways:
+  1. **The relay.** The app sends the file to the relay only when you tell it to send. You need no
+     GitHub account. The relay checks the file, commits it to the branch `inbox` and opens an
+     issue. It stores nothing about you. See [relay/README.md](relay/README.md).
+  2. **The issue form.** You attach the file to a GitHub issue
+     ([Send a report in 3 steps](#send-a-report-in-3-steps)). The issue form is the permanent
+     fallback, for example when the relay is off or refuses the file.
 - **A reviewer** of the project reads the report and accepts it or keeps it as a record.
 
 ## Send a report in 3 steps
@@ -65,6 +72,7 @@ personal detail. You must read the report before you send it.
 - [report-format.md](report-format.md): the report format and the `certify()` contract that each
   package implements.
 - [review.md](review.md): the procedure for a reviewer.
+- [relay/README.md](relay/README.md): the relay, its answers and its setup.
 
 ## Licence
 

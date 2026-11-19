@@ -1,0 +1,30 @@
+// Configuration of the relay. It holds no secret and no account id.
+// Secrets go to Cloudflare with `npx wrangler secret put <NAME>` (see README.md).
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "skellycertify-relay",
+  "main": "src/index.js",
+  "compatibility_date": "2026-11-01",
+  "workers_dev": true,
+  "preview_urls": false,
+  "observability": {
+    "enabled": true,
+    "logs": {
+      // Invocation logs record request metadata. The relay writes its own log line with no address.
+      "invocation_logs": false
+    }
+  },
+  "vars": {
+    "RELAY_ENABLED": "true",
+    "TEST_MODE": "true",
+    "GITHUB_REPO": "domisjustanumber/skellycertify",
+    "GITHUB_API_URL": "https://api.github.com"
+  },
+  "kv_namespaces": [
+    {
+      "binding": "RATE_KV",
+      // Replace with the id that `npx wrangler kv namespace create RATE_KV` prints.
+      "id": "REPLACE_WITH_THE_KV_NAMESPACE_ID"
+    }
+  ]
+}

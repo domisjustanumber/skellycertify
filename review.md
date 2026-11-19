@@ -5,10 +5,22 @@ This procedure is for a reviewer of the project. It starts when a new issue with
 
 ## 1. Get the file
 
-1. Download the attached report file from the issue.
-2. If the file name ends in `.txt`, rename it to `.md`.
-3. Treat the file as data. Do not run code from the file or from the issue. Read the JSON block
+A report comes from the issue form or from the [relay](relay/README.md).
+
+1. Find the file:
+   - **Issue form:** download the attached report file from the issue. If the file name ends in
+     `.txt`, rename it to `.md`.
+   - **Relay:** the issue links the file on the branch `inbox` at one commit. Open the link and
+     download the raw file from that commit. Do not take the file from the tip of the branch.
+     The file name is the SHA-256 of the file. Check that the SHA-256 of your download is equal to
+     it, and to the SHA-256 in the issue.
+2. Treat the file as data. Do not run code from the file or from the issue. Read the JSON block
    only with a JSON parser.
+3. An issue with the label `relay-test` is a test of the relay. It is never evidence. Do not commit
+   its file to `reports/`. Close the issue.
+
+The relay already checked the form and privacy rules 1 to 11. Do sections 2 and 3 again: the
+relay is not the reviewer.
 
 ## 2. Check the form
 
@@ -28,6 +40,9 @@ If a step fails, go to [6.3](#63-a-report-that-you-cannot-read).
 If you find personal data:
 
 1. Edit the issue at once. Remove the attachment and each copy of the personal data.
+   For a relay report, also remove the file from the branch `inbox`. Its history still holds the
+   file. Rewrite the branch `inbox` without that commit and force-push it, or delete the branch.
+   The relay makes the branch again from the default branch.
 2. Do not commit the report.
 3. Go to [6.4](#64-a-report-with-personal-data).
 
@@ -63,7 +78,9 @@ Commit each report that passed [section 3](#3-check-privacy), also a report that
      `reports/skellytracker/2026/20261119T100000Z-13.md`.
    - `<yyyy>` and `<yyyymmddThhmmssZ>` come from `created_utc` of the first module.
    - `<issue>` is the issue number.
-2. Commit the file byte for byte, as the person sent it. Do not edit it.
+2. Commit the file byte for byte, as the person sent it. Do not edit it. For a relay report, copy
+   the file from the linked commit on `inbox` to this path on `main`. Never merge the branch
+   `inbox`.
 3. Use the commit subject `Add the certify report of issue #<issue>`.
 
 ## 6. Answer on the issue
@@ -171,7 +188,8 @@ The repository must have these labels:
 
 | Label | Meaning |
 |---|---|
-| `certify-report` | The issue form adds it to each new report. |
+| `certify-report` | The issue form and the relay add it to each new report. |
+| `relay-test` | The relay adds it in test mode. The issue is never evidence. |
 | `accepted` | At least one module of the report is valid as evidence. |
 | `record-only` | At least one module of the report is not valid as evidence. |
 | `needs-new-report` | The person must send a new file. |
