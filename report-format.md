@@ -298,6 +298,15 @@ result `not-run`, with a reason such as `ep-not-installed`, `gpu-not-usable` or 
   Windows ML catalog it is the package version of the Windows ML record (or `windows-ml`). For a
   plugin pack it is the pack version, for example `0.2.0`. `pack_version` is optional. Older
   reports of level `quick` do not have it.
+- A pair whose EP has a plugin pack also has two facts of the installed pack in `details.eps.<label>`:
+  `installed_pack_version` (the `version` of the manifest `pack.json` of the installed pack in the
+  EP store) and `wheels_match_lock` (a boolean: `true` when the sha256 values of the wheels that the
+  install recorded in `pack.json` are exactly the sha256 values of the lock of the catalog for that
+  pack). Both are absent for a built-in EP, for an EP of the Windows ML catalog, and when the pack
+  has no manifest. The match compares the hashes that were recorded at install time. It does not read
+  a wheel again and does not hash the unpacked files. The store checks each unpacked file by presence
+  and size: a pack with a missing file or a file of another size is not usable, and its pair is
+  `not-run` with `ep-files` or `ep-stale`. A file that was changed with the same size is not found.
 - The quick check compares a GPU EP with the CPU EP. `cpu` is not in the default selection. When a
   caller names it, its checks `cpu:probe`, `cpu:image` and `cpu` are all `not-run` with the reason
   `not-gpu-ep`. Its `details.eps.cpu` is `{"gpu": null, "device": null, "pack_version": "builtin"}`,
@@ -347,7 +356,8 @@ result `not-run`, with a reason such as `ep-not-installed`, `gpu-not-usable` or 
    "cuda@10de-2484-0": {"gpu": "10de:2484", "device": "gpu:10de:2484:0",
                         "models": [{"key": "yolox-m", "version": "1.0.0", "size": "m", "precision": "fp16",
                                     "execution_provider": "cuda", "device": "gpu:10de:2484:0"}],
-                        "warnings": [], "pack_version": "0.2.0"},
+                        "warnings": [], "pack_version": "0.2.0",
+                        "installed_pack_version": "0.2.0", "wheels_match_lock": true},
    "directml@10de-2484-0": {"gpu": "10de:2484", "device": "gpu:10de:2484:0",
                             "models": [{"key": "yolox-m", "version": "1.0.0", "size": "m", "precision": "fp16",
                                         "execution_provider": "directml", "device": "gpu:10de:2484:0"}],
@@ -398,8 +408,29 @@ The order of the checks of a full report:
 - A named `cpu` pair is still the three rows `cpu:probe`, `cpu:image` and `cpu`, all `not-run` with
   `not-gpu-ep`.
 - With no EP named, `full` also takes a pair that has a reviewed row. `quick` skips such a pair.
-  With no EP at all, `full` still runs the CPU checks. It installs nothing. It downloads only the
-  test image.
+  With no EP at all, `full` still runs the CPU checks. For `certify("full")`, it installs nothing
+  and it downloads only the test image.
+
+**The tool `tools/certify_platform.py`.**
+
+- It writes one report file of [section 4](#4-the-report-file) with `"app": null` and one module of
+  kind `full`, named `certify-report-<yyyymmddThhmmssZ>.md`.
+- The module is the report of `certify("full")`, with the rows of the suite first. The suite has
+  four sections: `checkout`, `hardware`, `packs` and `full`. Each section gives a row `suite:<slug>`
+  and each of its checks a row `suite:<slug>:<name>`. For `full`, the row `suite:full` exists only
+  when `certify("full")` gave no report. A child process that did not exit cleanly adds
+  `suite:<slug>:exit` (`record-only`).
+- `suite:packs` installs each pack from the lock of the catalog into a new, empty EP store of the
+  run, with the sha256 check, and runs the probe on it. It has one row `suite:packs:<EP key>`, or
+  `suite:packs:<EP key>@<device>` for an EP with no pack that runs on each GPU. It does not touch the
+  EP store of the person. The checks of `certify("full")` in a tool report run on that new store, so
+  the pair checks say that a new install from the catalog works.
+- `details.suite` holds `version`, `selected`, `sections.<slug>` (`summary`, `seconds`, `details`),
+  `telemetry_database` (`before`, `after`) and `answers`.
+- The evidence reasons of the suite are added to those of the package: `section-1-not-run`,
+  `no-commit`, `modified-tree`, `python-differs`, `packages-differ`, `partial-run` (a section was
+  not selected, did not run or gave no result) and `cancelled`. A failed `suite:hardware` or
+  `suite:packs` row adds no reason: a failed check is a result that the reviewer reads.
 
 ## 4. The report file
 
@@ -684,59 +715,5 @@ These are the only packages of this format.
 
 | Package | Evidence for | `certify()` | Reason codes | Evidence rows |
 |---|---|---|---|---|
-| skellytracker | execution providers (EPs) | `skellytracker.certify` and `skellytracker.certify_plan`, levels `quick` and `full`. Package options: `execution_providers`, `pipeline`. The tool `tools/certify_platform.py` still writes the old format ([section 10](#10-differences-from-skellytrackercertify-suite1)). | `skellytracker/REASON_CODES.md` | `skellytracker/core/eps/ep_evidence.yaml` (EPs); this repository for the other sections |
+| skellytracker | execution providers (EPs) | `skellytracker.certify` and `skellytracker.certify_plan`, levels `quick` and `full`. Package options: `execution_providers`, `pipeline`. The tool `tools/certify_platform.py` writes a report file of this format (schema 1.1.0; see [3.6](#36-example-skellytracker)). | `skellytracker/REASON_CODES.md` | `skellytracker/core/eps/ep_evidence.yaml` (EPs); this repository for the other sections |
 | skellycam | cameras ([7.4](#74-camera-evidence)) | not yet implemented | not yet implemented | not yet implemented |
-
-## 10. Differences from skellytracker.certify-suite/1
-
-The report of `tools/certify_platform.py` of skellytracker uses the schema
-`skellytracker.certify-suite/1`. These changes make it a module report of this format. The function `certify("full")` of skellytracker
-is built ([3.6](#36-example-skellytracker)). Its result has flat checks and no sections. Making the
-tool call it is planned, not built. The steps below stay valid for what the tool still has to change.
-
-1. **Schema id.** Write `skellycertify.report/1.1.0` in place of `skellytracker.certify-suite/1`.
-   Move `suite_version` to `details.suite_version`.
-2. **Package block.** Add `package` with `name`, `version`, `commit` and `tree_modified`. Today the
-   commit and the clean state are in `details.checkout` of section 1, and the report records no
-   package version. `tree_modified` is `not checkout.clean`.
-3. **SemVer version.** `skellytracker.__version__` is `v2024.09.1019` today. That is not SemVer. The
-   package must give a SemVer version with no `v` prefix.
-4. **Commit with no git.** Today section 1 runs `git`. A frozen app has no git. The package must
-   also get its commit from metadata that the build writes.
-5. **Kind.** Add `kind`. The suite of today is the level `full`. Both levels are
-   `skellytracker.certify` ([3.6](#36-example-skellytracker)).
-6. **Host block.** Add `host` at the top level, from `probe_host()`: `os_name`, `os_release`,
-   `os_version`, `os_build`, `os_label` and `arch` go to `host.os.name`, `release`, `version`,
-   `build`, `label` and `arch`. The GPUs go to `host.gpus`, with `id` from `evidence.gpu_id()`.
-   Section 2 keeps its details.
-7. **Flat checks.** Move each check out of `sections[].checks` to the top-level `checks`, with
-   `section` set to the section number as a string. The sections keep `result`, `reason`,
-   `summary`, `seconds`, `exit_code` and `details`. `questions` of a section moves to the plan
-   ([2.6](#26-the-plan-function)). The answers stay in `answers`.
-8. **Section ids.** `number` (an integer) becomes `id` (a string), for example `"3"`.
-9. **Reason field.** Rename `reason_code` to `reason` in each check, each section and each cleanup
-   row. The `reason_code` keys inside `details` can stay.
-10. **Numbers.** Move each extra key of a check (for example `changed_files`, `differ`, `pinned`,
-    `exit_code`, `grace_seconds`, `reasons` and the agreement fields of section 4) into `numbers`.
-11. **Cancel code.** The reason `interrupted` becomes `cancelled`, in the checks and in
-    `evidence.reasons`.
-12. **Evidence block.** `evidence` keeps `valid` and `reasons`. Remove `tag` and `commit` from it:
-    the commit is in `package`. Remove the reason `no-tag`: any build can give evidence. The tag
-    stays a fact in `details.checkout`. Add `no-version` and `no-commit`. Keep
-    `section-1-not-run`, `python-differs` and `packages-differ` as codes of the package.
-    `modified-tree` and `partial-run` keep their meaning.
-13. **Note.** `notes` becomes `note` and moves out of the module report to the report file
-    object. The limit of 2000 characters stays.
-14. **Package facts.** Move `selected`, `telemetry_database` and `scrub` into `details`.
-15. **Report file.** Wrap the module report in the object of [4.1](#41-content):
-    `{"schema", "app": null, "modules": [<module report>], "note"}`. Add the module line and the
-    `Module` column to the summary table. The title becomes `# Certify report`. The rest of the
-    Markdown layout stays.
-16. **Reason code list.** Write the list of the reason codes of skellytracker, with the forms
-    `install-<code>`, `catalog-<ExceptionClass>`, `image-<code>`, `cleanup-<ExceptionClass>`,
-    `probe-<level>-failed` and the bare exception class name.
-17. **Function.** Add a public `certify(level, progress=None, cancel=None)` for the whole package.
-    skellytracker has it for the levels `quick` and `full`. Today the suite is a tool script with consent at a terminal. It starts `sys.executable` with
-    the script path for each section. `skellytracker.core.eps.certify(key)` tests one EP and gives
-    only a step name to `progress`. The new function must not ask questions, must send complete
-    progress messages, must obey `cancel`, and must not start `sys.executable` with a script path.

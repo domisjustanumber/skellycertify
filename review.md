@@ -32,10 +32,6 @@ relay is not the reviewer.
 3. The object must have `app`, `modules` and `note`. Each module report must have the required
    fields of [section 3](report-format.md#3-the-module-report).
 
-4. A report of `tools/certify_platform.py` in its old format (schema
-   `skellytracker.certify-suite/1`, with sections) is not a report of this format. Do not convert it
-   by hand.
-
 If a step fails, go to [6.3](#63-a-report-that-you-cannot-read).
 
 ## 3. Check privacy
@@ -71,13 +67,18 @@ Do these steps for each module report in `modules`. One module can be valid and 
    GPU. The catalog of the package decides if the pair is offered.
 
    A pair that uses a plugin pack needs two facts in `details.eps["<label>"]`, read from the
-   installed pack: the version of the installed pack, and whether the sha256 values of the
-   installed wheels equal those of the catalog lock. The field names will be added to
-   [3.6](report-format.md#36-example-skellytracker) when skellytracker has them. A reviewed row for
-   such a pair needs both facts, and the hashes must be equal. When the facts are absent, or the
-   hashes differ, write no row for that pair. The pair is a record only. Name the reason in the
-   answer comment. A pair on a built-in EP (`directml`, `coreml`, `cpu`: `pack_version` is
-   `builtin`) has no pack and needs no such facts.
+   installed pack: `installed_pack_version` and `wheels_match_lock`
+   ([3.6](report-format.md#36-example-skellytracker)). A reviewed row for such a pair needs both
+   facts. `wheels_match_lock` must be `true`, and `installed_pack_version` must be equal to
+   `pack_version`. Else write no row for that pair. The pair is a record only. Name it with the
+   "No row for" line of [6.1](#61-an-accepted-report). The match proves only that the hashes that
+   the install recorded are those of the catalog. A file that was changed with the same size is not
+   found. A pair on a built-in EP (`directml`, `coreml`, `cpu`: `pack_version` is `builtin`) or on
+   an EP of the Windows ML catalog has no plugin pack and needs no such facts.
+
+   In a report of the tool `tools/certify_platform.py`, a row `suite:packs:<EP key>` with the result
+   `fail` means that the pack of that EP did not install or verify in the new store. Write no row
+   for the pairs of that EP. Name the EP with the "No row for" line.
 4. Check what the `kind` gives ([Kinds of evidence](report-format.md#72-kinds-of-evidence)):
    - A valid `full` module can give a reviewed row.
    - A valid `quick` module alone never gives a reviewed row.
@@ -85,7 +86,9 @@ Do these steps for each module report in `modules`. One module can be valid and 
    - A row from a `passive` record never replaces a row that the package requires from a
      maintainer. For example, skellytracker requires maintainer rows for an NVIDIA version bump.
 
-A module that passes steps 1 to 3 is accepted. Each other module is a record only.
+A module that passes steps 1 to 3 is accepted. In a skellytracker module, step 3 must also leave at
+least one pair that it does not exclude. When it excludes each pair, the module is a record only.
+Each other module is a record only.
 Step 4 tells if an accepted module gives an evidence row.
 
 ## 5. Commit the report
@@ -131,7 +134,21 @@ Commit each report that passed [section 3](#3-check-privacy), also a report that
    > Also failed: `directml@10de-2484-0:jpeg` (`over_limit`), `directml@10de-2484-0:pipeline-6`
    > (`crashed`).
 
-   Do not list the single `<x>:jpeg:<name>` checks. The outcome row is enough.
+   Do not list the single `<x>:jpeg:<name>` checks. The outcome row is enough. In a report of the
+   tool `tools/certify_platform.py`, also name each `suite:` row that has the result `fail`, with its
+   reason, for example `suite:packs:cuda` (`install-<code>`).
+
+   For a pair that step 3 excludes, add one fixed line:
+
+   > No row for `cuda@10de-2484-0`: the facts of the installed pack are absent.
+
+   Change the text after the colon to the real reason, for example "`wheels_match_lock` is not
+   true" or "`suite:packs:cuda` failed". The module keeps the label `accepted` when at least one
+   pair gives a row. When no pair gives a row, the module is a record only: use the answer of
+   [6.2](#62-a-report-that-is-a-record-only) and name the reason in it.
+
+   In the answer, say which kind the report was: from the app (or from `certify()`), or from the
+   tool `tools/certify_platform.py` ([section 7](#7-write-the-evidence-row)).
 
 3. Add the label `accepted`. Close the issue.
 
@@ -154,9 +171,6 @@ Add the two labels. Name each module by its `id` when it has one.
    > Thank you. We cannot read the data of your report: `<step that failed>`. Please run the
    > certification again and attach the new file without changes.
 
-   For a report in the old format of `tools/certify_platform.py`, ask for a run of
-   `certify("full")` (in the app, or as the package documents) in place of "the certification".
-
 2. Add the label `needs-new-report`. Keep the issue open.
 
 ### 6.4 A report with personal data
@@ -174,9 +188,11 @@ Add the two labels. Name each module by its `id` when it has one.
 The evidence row goes to the package that owns the result. The app reads evidence rows only from
 the packages that it ships with. Each package gives the format of its rows.
 
-A reviewed row says that the EP works on the store of that person. It does not say that a new
-install from the catalog works. The tool `tools/certify_platform.py` of skellytracker is planned to
-check that.
+A report from the app (`"app"` is not `null`, or a package run with `certify()`) says that the EP
+works on the EP store of that person. A report of the tool `tools/certify_platform.py` (it has
+`suite:` rows) says that a new install from the catalog works, because the tool installs each pack
+into a new store. The two give the same row. The row has no field for this difference. Say in the
+answer comment which kind the report was.
 
 ### 7.1 skellytracker: an execution provider
 
@@ -193,7 +209,7 @@ Write one row for each execution provider and GPU model of the report, also for 
 | `source` | `field` for a report from this repository. This is the mark of field evidence. |
 | `result` | `pass` or `fail`: the result of the check named `<label>`. |
 | `catalog_package` | Only for an EP of the Windows ML catalog: the package version of that catalog, as a string. |
-| `pack` | `details.eps["<label>"].pack_version`. When it is absent, look it up in the catalog of the package at `package.commit`, with `details.versions.catalog_revision`. |
+| `pack` | For a pair that uses a plugin pack: `details.eps["<label>"].installed_pack_version`. For each other EP: `details.eps["<label>"].pack_version`. When it is absent, look it up in the catalog of the package at `package.commit`, with `details.versions.catalog_revision`. |
 | `ort` | `details.versions.ort_version`. |
 | `windowsml` | `details.versions.windowsml`, or `null`. |
 | `driver` | `host.gpus[].driver_version` of the GPU whose `id` is `details.eps["<label>"].gpu`. |
