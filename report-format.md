@@ -306,7 +306,7 @@ result `not-run`, with a reason such as `ep-not-installed`, `gpu-not-usable` or 
   has no manifest. The match compares the hashes that were recorded at install time. It does not read
   a wheel again and does not hash the unpacked files. The store checks each unpacked file by presence
   and size: a pack with a missing file or a file of another size is not usable, and its pair is
-  `not-run` with `ep-files` or `ep-stale`. A file that was changed with the same size is not found.
+  `not-run` with `ep-files`. A file that was changed with the same size is not found.
 - The quick check compares a GPU EP with the CPU EP. `cpu` is not in the default selection. When a
   caller names it, its checks `cpu:probe`, `cpu:image` and `cpu` are all `not-run` with the reason
   `not-gpu-ep`. Its `details.eps.cpu` is `{"gpu": null, "device": null, "pack_version": "builtin"}`,
@@ -422,7 +422,9 @@ The order of the checks of a full report:
   `suite:<slug>:exit` (`record-only`).
 - `suite:packs` installs each pack from the lock of the catalog into a new, empty EP store of the
   run, with the sha256 check, and runs the probe on it. It has one row `suite:packs:<EP key>`, or
-  `suite:packs:<EP key>@<device>` for an EP with no pack that runs on each GPU. It does not touch the
+  `suite:packs:<EP key>@<device>` for an EP with no pack that runs on each GPU. In this row,
+  `<device>` is the full device key, for example `suite:packs:directml@gpu:10de:2484:0`. The label
+  of the pair has the short form, `directml@10de-2484-0`. It does not touch the
   EP store of the person. The checks of `certify("full")` in a tool report run on that new store, so
   the pair checks say that a new install from the catalog works.
 - `details.suite` holds `version`, `selected`, `sections.<slug>` (`summary`, `seconds`, `details`),
