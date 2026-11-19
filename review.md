@@ -32,6 +32,10 @@ relay is not the reviewer.
 3. The object must have `app`, `modules` and `note`. Each module report must have the required
    fields of [section 3](report-format.md#3-the-module-report).
 
+4. A report of `tools/certify_platform.py` in its old format (schema
+   `skellytracker.certify-suite/1`, with sections) is not a report of this format. Do not convert it
+   by hand.
+
 If a step fails, go to [6.3](#63-a-report-that-you-cannot-read).
 
 ## 3. Check privacy
@@ -62,8 +66,18 @@ Do these steps for each module report in `modules`. One module can be valid and 
    execution provider with the catalog status `field-test` needs a `pass` in the check named
    `<label>`. That check passes only when its `probe` and `image` checks pass. A timing or a JPEG
    check never changes it. The report gives a `pass` or a `fail` also on a GPU whose hardware class
-   does not list the execution provider, for example `directml` on a GPU that is not from AMD. You
-   decide if such a result gives a reviewed row.
+   does not list the execution provider, for example `directml` on a GPU that is not from AMD. Write
+   the row as for each other pair. The row says only what the report measured for this EP, OS and
+   GPU. The catalog of the package decides if the pair is offered.
+
+   A pair that uses a plugin pack needs two facts in `details.eps["<label>"]`, read from the
+   installed pack: the version of the installed pack, and whether the sha256 values of the
+   installed wheels equal those of the catalog lock. The field names will be added to
+   [3.6](report-format.md#36-example-skellytracker) when skellytracker has them. A reviewed row for
+   such a pair needs both facts, and the hashes must be equal. When the facts are absent, or the
+   hashes differ, write no row for that pair. The pair is a record only. Name the reason in the
+   answer comment. A pair on a built-in EP (`directml`, `coreml`, `cpu`: `pack_version` is
+   `builtin`) has no pack and needs no such facts.
 4. Check what the `kind` gives ([Kinds of evidence](report-format.md#72-kinds-of-evidence)):
    - A valid `full` module can give a reviewed row.
    - A valid `quick` module alone never gives a reviewed row.
@@ -108,6 +122,17 @@ Commit each report that passed [section 3](#3-check-privacy), also a report that
    > Thank you. Your report is valid as evidence. We committed it as `<path>`. A `quick` report
    > alone gives no evidence row. We keep it with the other reports of the same versions.
 
+   In a skellytracker report of level `full`, the checks `<x>:jpeg` and `<x>:pipeline-<n>` never
+   change the result of the pair. A module can be accepted while such a check has the result
+   `fail`, for example `<x>:jpeg` with `over_limit`, or `<x>:pipeline-6` with `crashed` or
+   `timed-out`. This does not change the acceptance. In the answer, always name each `<x>:jpeg`
+   check and each `<x>:pipeline-<n>` check that has the result `fail`, with its reason, for example:
+
+   > Also failed: `directml@10de-2484-0:jpeg` (`over_limit`), `directml@10de-2484-0:pipeline-6`
+   > (`crashed`).
+
+   Do not list the single `<x>:jpeg:<name>` checks. The outcome row is enough.
+
 3. Add the label `accepted`. Close the issue.
 
 ### 6.2 A report that is a record only
@@ -129,6 +154,9 @@ Add the two labels. Name each module by its `id` when it has one.
    > Thank you. We cannot read the data of your report: `<step that failed>`. Please run the
    > certification again and attach the new file without changes.
 
+   For a report in the old format of `tools/certify_platform.py`, ask for a run of
+   `certify("full")` (in the app, or as the package documents) in place of "the certification".
+
 2. Add the label `needs-new-report`. Keep the issue open.
 
 ### 6.4 A report with personal data
@@ -145,6 +173,10 @@ Add the two labels. Name each module by its `id` when it has one.
 
 The evidence row goes to the package that owns the result. The app reads evidence rows only from
 the packages that it ships with. Each package gives the format of its rows.
+
+A reviewed row says that the EP works on the store of that person. It does not say that a new
+install from the catalog works. The tool `tools/certify_platform.py` of skellytracker is planned to
+check that.
 
 ### 7.1 skellytracker: an execution provider
 
