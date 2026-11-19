@@ -46,6 +46,19 @@ The function returns one module report ([section 3](#3-the-module-report)).
   result in the report.
 - The `kind` of the returned report is equal to `level`.
 
+**Package options.** A package can add its own options after these three arguments. Each option
+must be keyword-only and must have a default. The call `certify(level)` must always work.
+`certify_plan` takes the same options. The package gives its options in its own documentation.
+For example, skellytracker takes the execution providers to check and the pipeline of the user:
+
+```python
+certify("quick", progress, cancel, execution_providers=["cuda"], pipeline=config)
+```
+
+An option changes which checks run. It does not change the format of the report. When an option
+selects only a part of the checks of a level, the report is not valid as evidence (`partial-run`),
+unless the rules of the package say that the selected part is complete for one item.
+
 ### 2.3 Progress messages
 
 Each progress message holds the complete current state of the run. It is never a delta.
