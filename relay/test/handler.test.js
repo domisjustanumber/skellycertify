@@ -276,7 +276,7 @@ test('503 relay-off: the off switch answers at once', async () => {
 });
 
 test('503 relay-misconfigured: no credential, a part of the App secrets, no salt, no limiter binding', async () => {
-  for (const extra of [{ GITHUB_TOKEN: undefined }, { GITHUB_APP_ID: '1' }, { RATE_SALT: undefined }, { SENDER_LIMIT: undefined }, { BURST_LIMIT: undefined }, { GITHUB_REPO: 'x' }]) {
+  for (const extra of [{ GITHUB_TOKEN: undefined }, { GITHUB_APP_CLIENT_ID: '1' }, { RATE_SALT: undefined }, { SENDER_LIMIT: undefined }, { BURST_LIMIT: undefined }, { GITHUB_REPO: 'x' }]) {
     assertError(await send(makeEnv(extra), createFakeGitHub(), post(VALID)), 503, 'relay-misconfigured', true);
   }
 });
@@ -305,7 +305,7 @@ test('GitHub App auth: the App secrets win over the token; PKCS#1 and PKCS#8 key
     const appPublicKey = await webcrypto.subtle.importKey('spki', publicKey.export({ type: 'spki', format: 'der' }),
       { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify']);
     const gh = createFakeGitHub({ appPublicKey, token: 'never-used' });
-    const env = makeEnv({ GITHUB_APP_ID: `12345${type}`, GITHUB_APP_INSTALLATION_ID: '678', GITHUB_APP_PRIVATE_KEY: pem, GITHUB_TOKEN: 'test-token' });
+    const env = makeEnv({ GITHUB_APP_CLIENT_ID: `12345${type}`, GITHUB_APP_INSTALLATION_ID: '678', GITHUB_APP_PRIVATE_KEY: pem, GITHUB_TOKEN: 'test-token' });
     const r = await send(env, gh, post(VALID));
     assert.equal(r.res.status, 200, type);
     assert.deepEqual(gh.state.jwtIssuers, [`12345${type}`], 'one JWT; the installation token is cached');
@@ -315,7 +315,7 @@ test('GitHub App auth: the App secrets win over the token; PKCS#1 and PKCS#8 key
 });
 
 test('GitHub App auth: a bad key is a configuration error', async () => {
-  const env = makeEnv({ GITHUB_APP_ID: '9', GITHUB_APP_INSTALLATION_ID: '9', GITHUB_APP_PRIVATE_KEY: 'not a key' });
+  const env = makeEnv({ GITHUB_APP_CLIENT_ID: '9', GITHUB_APP_INSTALLATION_ID: '9', GITHUB_APP_PRIVATE_KEY: 'not a key' });
   assertError(await send(env, createFakeGitHub(), post(VALID)), 503, 'relay-misconfigured', true);
 });
 

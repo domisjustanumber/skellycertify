@@ -542,7 +542,7 @@ before volunteers use the relay.
 7. **Where can this GitHub App be installed?**: **Only on this account**.
 8. Click **Create GitHub App**.
 
-Success: the app page shows the **App ID** and the **Client ID**.
+Success: the app page shows the **Client ID**. You need it in step 4.
 
 ## 2. Install the app on the one repository
 
@@ -570,14 +570,14 @@ openssl pkcs8 -topk8 -nocrypt -in downloaded-key.pem -out key-pkcs8.pem
 ## 4. Set the three secrets
 
 ```powershell
-npx wrangler secret put GITHUB_APP_ID
+npx wrangler secret put GITHUB_APP_CLIENT_ID
 npx wrangler secret put GITHUB_APP_INSTALLATION_ID
 Get-Content -Raw .\path\to\downloaded-key.pem | npx wrangler secret put GITHUB_APP_PRIVATE_KEY
 ```
 
 Bash, last line: `npx wrangler secret put GITHUB_APP_PRIVATE_KEY < path/to/downloaded-key.pem`
 
-- `GITHUB_APP_ID`: the App ID. The Client ID also works. GitHub recommends the Client ID.
+- `GITHUB_APP_CLIENT_ID`: the Client ID of the app, from the app page. It is not the App ID.
 - `GITHUB_APP_INSTALLATION_ID`: the number from step 2.
 - Do not paste the key at the prompt. A prompt can cut a value with many lines. Use the pipe.
 

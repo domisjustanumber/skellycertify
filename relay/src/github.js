@@ -53,12 +53,12 @@ export function pemToPkcs8(pem) {
   return out;
 }
 
-export async function makeAppJwt(appId, privateKeyPem, nowSeconds) {
+export async function makeAppJwt(clientId, privateKeyPem, nowSeconds) {
   const key = await crypto.subtle.importKey('pkcs8', pemToPkcs8(privateKeyPem),
     { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['sign']);
   const header = base64url(utf8(JSON.stringify({ alg: 'RS256', typ: 'JWT' })));
   // iat 60 s in the past for clock drift; exp at most 10 minutes ahead (GitHub docs).
-  const claims = base64url(utf8(JSON.stringify({ iat: nowSeconds - 60, exp: nowSeconds + 540, iss: String(appId) })));
+  const claims = base64url(utf8(JSON.stringify({ iat: nowSeconds - 60, exp: nowSeconds + 540, iss: String(clientId) })));
   const sig = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', key, utf8(`${header}.${claims}`));
   return `${header}.${claims}.${base64url(new Uint8Array(sig))}`;
 }
@@ -68,7 +68,7 @@ export async function makeAppJwt(appId, privateKeyPem, nowSeconds) {
 let cachedInstallation = null; // { key, token, expiresAt } for one Worker isolate
 
 export function authMode(env) {
-  const app = [env.GITHUB_APP_ID, env.GITHUB_APP_INSTALLATION_ID, env.GITHUB_APP_PRIVATE_KEY];
+  const app = [env.GITHUB_APP_CLIENT_ID, env.GITHUB_APP_INSTALLATION_ID, env.GITHUB_APP_PRIVATE_KEY];
   if (app.every(Boolean)) return 'app';
   if (app.some(Boolean)) throw new ConfigError('set all three GITHUB_APP_* secrets or none');
   if (env.GITHUB_TOKEN) return 'token';
@@ -116,11 +116,11 @@ export function createGitHub(env, { fetch = globalThis.fetch, now = Date.now } =
 
   async function token() {
     if (mode === 'token') return env.GITHUB_TOKEN;
-    const key = `${env.GITHUB_APP_ID}/${env.GITHUB_APP_INSTALLATION_ID}`;
+    const key = `${env.GITHUB_APP_CLIENT_ID}/${env.GITHUB_APP_INSTALLATION_ID}`;
     if (cachedInstallation?.key === key && cachedInstallation.expiresAt - now() > 5 * 60_000) return cachedInstallation.token;
     let jwt;
     try {
-      jwt = await makeAppJwt(env.GITHUB_APP_ID, env.GITHUB_APP_PRIVATE_KEY, Math.floor(now() / 1000));
+      jwt = await makeAppJwt(env.GITHUB_APP_CLIENT_ID, env.GITHUB_APP_PRIVATE_KEY, Math.floor(now() / 1000));
     } catch {
       throw new ConfigError('GITHUB_APP_PRIVATE_KEY is not a usable RSA key');
     }
