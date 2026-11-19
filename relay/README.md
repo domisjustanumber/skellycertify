@@ -173,15 +173,17 @@ Success: the token list shows `skellycertify-relay-test` with an expiry date in 
 ## 4. Create the Cloudflare account and choose the subdomain
 
 1. Create an account at `https://dash.cloudflare.com/sign-up`.
-2. In the dashboard, open **Workers & Pages**.
-3. Cloudflare asks for a `workers.dev` subdomain on the first visit. If it does not ask, find
-   **Your subdomain** on the **Workers & Pages** page and click **Change**.
+2. In the dashboard sidebar, open **Compute** > **Workers & Pages**.
 
 The address of the relay is `https://skellycertify-relay.<subdomain>.workers.dev`.
 The subdomain is public. Each Worker of the account shows it. Do not use your name, your user name
 or a word that identifies you. Use a neutral word, for example `freemocap-relay` or a random word.
 
-Success: the **Workers & Pages** page shows your subdomain.
+Choose the subdomain now. Use only lowercase letters, digits and hyphens. You do not create it in
+the dashboard. Wrangler creates it at the first deploy, in
+[step 11](#11-deploy).
+
+Success: the **Workers & Pages** page opens and you have chosen a subdomain.
 
 ## 5. Install the tools
 
@@ -197,13 +199,39 @@ dependency. Its version is pinned in `package.json`.
 
 ## 6. Log in to Cloudflare
 
+A plain `npx wrangler login` asks for each permission that Wrangler knows (KV, D1, Pages, email,
+AI and more). The relay needs three. Ask for these three only:
+
 ```powershell
-npx wrangler login
+npx wrangler login --scopes account:read user:read workers_scripts:write
 ```
 
-A browser window opens. Click **Allow**.
+| Scope | Why the relay needs it |
+|---|---|
+| `account:read` | Wrangler finds the account id. `wrangler.jsonc` holds no account id. |
+| `user:read` | Wrangler reads your account memberships. `whoami` shows your email address. |
+| `workers_scripts:write` | Deploy, secrets, the `workers.dev` subdomain, `wrangler tail` and `wrangler delete`. |
 
-Success: Wrangler prints `Successfully logged in.` Check with `npx wrangler whoami`.
+Wrangler adds `offline_access` itself. It lets Wrangler renew the login.
+
+A browser window opens. Check the address of the page. It contains
+`scope=account%3Aread%20user%3Aread%20workers_scripts%3Awrite%20offline_access`. Check that the
+page lists only these permissions. Then click **Allow**.
+
+If the page lists more permissions (for example D1, Pages or Email Routing), do not click
+**Allow**. Close the page and stop the command with Ctrl+C. That login did not come from the
+command above. Each other Wrangler command (`deploy`, `secret put`, `tail`) starts a login with
+all permissions when you are not logged in. Always run the command above first.
+
+If you already logged in with all permissions, run `npx wrangler logout` first. Then log in again
+with the command above.
+
+Success: Wrangler prints `Successfully logged in.` Check with `npx wrangler whoami`. It lists the
+three scopes and `offline_access`. It also warns that Wrangler is missing some expected OAuth
+scopes. This warning is correct. Ignore it.
+
+If a later command fails with an authentication error (code 10000), a scope is missing. Run
+`npx wrangler login --scopes-list` to see each scope. Add only the scope that the command needs.
 
 ## 7. Set the secrets
 
@@ -326,6 +354,21 @@ folder `.wrangler/`. Stop the other run, or start this run with `--persist-to` a
 npx wrangler deploy
 ```
 
+On an account that has no `workers.dev` subdomain, Wrangler creates it:
+
+1. Wrangler asks if you want to register a `workers.dev` subdomain now. Answer yes.
+2. Wrangler asks for the subdomain. Type the subdomain that you chose in
+   [step 4](#4-create-the-cloudflare-account-and-choose-the-subdomain).
+3. Wrangler shows the address `https://<subdomain>.workers.dev` and asks to proceed. Answer yes.
+   If another account uses the subdomain, Wrangler refuses it. Then type another one.
+
+The new subdomain can take a few minutes to work. Until then, the address can answer with a DNS
+error. Wait and try again.
+
+To change the subdomain later, see
+`https://developers.cloudflare.com/workers/configuration/routing/workers-dev/`. A change of the
+subdomain changes the address of each Worker of the account.
+
 Success: Wrangler prints the address `https://skellycertify-relay.<subdomain>.workers.dev`.
 
 ## 12. Check the health
@@ -366,12 +409,15 @@ node scripts/send-sample.mjs https://skellycertify-relay.<subdomain>.workers.dev
 Success: `HTTP 200`, `"duplicate":true` and the same issue number. GitHub shows no new issue and
 no new commit.
 
-The per-sender limit allows 2 POSTs in 60 seconds. Wait 60 seconds before the next step. A third
-POST in the same minute gives `HTTP 429` `rate-limited`. That shows that the limit works.
+The per-sender limit is 2 POSTs in 60 seconds. Wait 60 seconds before the next step. Cloudflare
+counts with a delay, so the live relay lets more than 2 fast POSTs pass before it answers
+`HTTP 429` `rate-limited`. In a test of 12 POSTs in one second, the first 8 passed. To see the
+limit work, send `samples/refused-format.md` 12 times with no pause. A refused file makes nothing
+on GitHub.
 
 ## 16. Send the refused samples
 
-Send the two files with 60 seconds between them, or the second gets `HTTP 429`.
+Send the two files with 60 seconds between them, or the second can get `HTTP 429`.
 
 ```powershell
 node scripts/send-sample.mjs https://skellycertify-relay.<subdomain>.workers.dev samples/refused-privacy.md
@@ -395,7 +441,7 @@ The fastest stop is in [Kill steps](#21-kill-steps).
 The relay writes one log line for each request:
 `{"t": ..., "outcome": ..., "status": ..., "bytes": ..., "hash": <12 characters>}`.
 
-- Dashboard: **Workers & Pages** > `skellycertify-relay` > **Observability** (or **Logs**).
+- Dashboard: **Compute** > **Workers & Pages** > `skellycertify-relay` > **Observability** (or **Logs**).
 - Live: `npx wrangler tail --format pretty`.
 
 Keep these settings:
@@ -445,7 +491,7 @@ that day, or rotate the token.
 
 Do one or more of these steps, from fastest to strongest:
 
-1. Stop the address: dashboard, **Workers & Pages** > `skellycertify-relay` > **Settings** >
+1. Stop the address: dashboard, **Compute** > **Workers & Pages** > `skellycertify-relay` > **Settings** >
    **Domains & Routes**, then disable `workers.dev`. Also set `"workers_dev": false` in
    `wrangler.jsonc`. Else the next deploy turns the address on again.
 2. Switch the relay off with [step 17](#17-test-the-off-switch).

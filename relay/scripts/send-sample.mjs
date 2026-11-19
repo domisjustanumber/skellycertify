@@ -23,4 +23,5 @@ try {
 } catch {
   // not JSON: printed above
 }
-process.exit(res.ok ? 0 : 1);
+// exitCode, not process.exit(): exit directly after fetch crashes Node on Windows (libuv assertion).
+process.exitCode = res.ok ? 0 : 1;
