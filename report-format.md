@@ -272,12 +272,11 @@ under `details`.
 | `seconds`, `exit_code` | no | The time and the exit code of the child process of the section. |
 | `details` | no | Facts of the section. They obey [section 6](#6-privacy-rules). |
 
-### 3.6 Example: skellytracker, level `quick`
+### 3.6 Example: skellytracker
 
-This is the layout of skellytracker for the level `quick`. The layout of the level `full` is not
-defined yet. It will be added when the level is built. Today `full` returns one check `full` with
-the result `not-run` and the reason `not-built`, and writes no file. The layout of `details` is the
-layout of the package. The CPU name, the commit and the id are example values.
+This is the layout of skellytracker for the level `quick`. The level `full` has the same layout
+and more checks (see "Level `full`" below). The layout of `details` is the layout of the package.
+The CPU name, the commit and the id are example values.
 
 One report is one `certify()` call. It covers each selected pair of an execution provider (EP) and
 a GPU. An EP that was not selected is not in the report. A selected pair that cannot run has the
@@ -288,7 +287,7 @@ result `not-run`, with a reason such as `ep-not-installed`, `gpu-not-usable` or 
 - A check name with no `:` is the row of the pair. It passes only when its `probe` and `image`
   checks pass.
 - The other checks of a pair are `<label>:probe` and `<label>:image`. For `cuda` and `trt-rtx` on a
-  GPU there are also `<label>:jpeg-decode` and `<label>:jpeg-preprocess`.
+  GPU there are also `<label>:jpeg-decode` and `<label>:jpeg-preprocess` (level `quick`).
 - `details.eps.<label>` holds `gpu` (the GPU id, for example `10de:2484`, `chip:<slug>` for
   `coreml`, or `null`), `device` (the device key or `null`; the full form, for example
   `gpu:10de:2484:0`, not the short form of the label), `models`, `warnings` and `pack_version`.
@@ -362,6 +361,45 @@ result `not-run`, with a reason such as `ep-not-installed`, `gpu-not-usable` or 
  "evidence": {"valid": true, "reasons": []}
 }
 ```
+
+**Level `full`.** The layout is the same as for `quick`: flat `checks`, no sections, the same
+`details.eps` and `details.versions`. A full report adds
+`details.full`: `{"camera_counts": [1, 3, 6], "warmup_calls": 10, "timed_calls": 100, "running_mode": "video"}`.
+A full run writes a report file. skellytracker uses the `id` also as the file name and as the
+hand-in id. Older files of schema 1.0.0 stay readable and have no `id`.
+
+The order of the checks of a full report:
+
+1. The CPU EP first, with no row of its own: `cpu:pipeline-1`, `cpu:pipeline-3`, `cpu:pipeline-6`,
+   `cpu:jpeg`, then `cpu:jpeg:<name>` for each check of the JPEG certification.
+2. Then each pair, with the same labels as `quick`: `<label>:probe`, `<label>:image`,
+   `<label>:pipeline-1`, `<label>:pipeline-3`, `<label>:pipeline-6`, `<label>:jpeg`, each
+   `<label>:jpeg:<name>`, then `<label>`. A full report has no `<label>:jpeg-decode` and no
+   `<label>:jpeg-preprocess`.
+
+- `<x>:pipeline-<n>` is the timing of the pipeline at `<n>` cameras. Its result is `record-only`.
+  Its `numbers` are `cameras`, `start_seconds`, `first_call_ms`, `calls`, `median_ms`, `p95_ms`,
+  `vram_before_mib` and `peak_vram_mib` (`null` when there is no VRAM reader). A pair on a GPU also
+  has `against_cpu` and `speed_against_cpu`.
+- A timing is `not-run` with the class name of an exception as the reason when the run raised, for
+  example when there is no VRAM at 6 cameras. It is `not-run` with `image-not-passed` when the image
+  check did not pass, and with `models-missing` on the CPU EP when a model file is absent. It is
+  `fail` with `crashed` or `timed-out` when the child process died.
+- `<x>:jpeg` is the outcome of the JPEG checks. It is `fail`, with the reason of the first failed
+  check, when a check failed. Else it is `pass` when a check passed. Else it is `not-run` with
+  `no-check`. It is `not-run` with `probe-not-passed` when the probe did not pass. It exists only for
+  `cuda`, `trt-rtx`, `directml`, `amdgpu` and `migraphx` on a GPU.
+- `<x>:jpeg:<name>` is one check of the JPEG certification, for example `cpu_decode.baseline_420` or
+  `gpu_decode.baseline_422`. There are about 70 names for each target today. The result is `pass`,
+  `fail`, `not-run` or `record-only`. The reason keeps the code of the JPEG module, with
+  underscores, for example `ep_not_present`, `no_gpu_decode_on_ep` or `over_limit`.
+- `<name>:exit` rows are as in `quick`.
+- `<label>` passes when its `probe` and `image` pass. A timing or a JPEG check never changes it.
+- A named `cpu` pair is still the three rows `cpu:probe`, `cpu:image` and `cpu`, all `not-run` with
+  `not-gpu-ep`.
+- With no EP named, `full` also takes a pair that has a reviewed row. `quick` skips such a pair.
+  With no EP at all, `full` still runs the CPU checks. It installs nothing. It downloads only the
+  test image.
 
 ## 4. The report file
 
@@ -646,13 +684,15 @@ These are the only packages of this format.
 
 | Package | Evidence for | `certify()` | Reason codes | Evidence rows |
 |---|---|---|---|---|
-| skellytracker | execution providers (EPs) | `skellytracker.certify` and `skellytracker.certify_plan`, level `quick`. Package options: `execution_providers`, `pipeline`. The level `full` is the stand-alone tool `tools/certify_platform.py` for now. | `skellytracker/REASON_CODES.md` (level `quick` only so far) | `skellytracker/core/eps/ep_evidence.yaml` (EPs); this repository for the other sections |
+| skellytracker | execution providers (EPs) | `skellytracker.certify` and `skellytracker.certify_plan`, levels `quick` and `full`. Package options: `execution_providers`, `pipeline`. The tool `tools/certify_platform.py` still writes the old format ([section 10](#10-differences-from-skellytrackercertify-suite1)). | `skellytracker/REASON_CODES.md` | `skellytracker/core/eps/ep_evidence.yaml` (EPs); this repository for the other sections |
 | skellycam | cameras ([7.4](#74-camera-evidence)) | not yet implemented | not yet implemented | not yet implemented |
 
 ## 10. Differences from skellytracker.certify-suite/1
 
 The report of `tools/certify_platform.py` of skellytracker uses the schema
-`skellytracker.certify-suite/1`. These changes make it a module report of this format:
+`skellytracker.certify-suite/1`. These changes make it a module report of this format. The function `certify("full")` of skellytracker
+is built ([3.6](#36-example-skellytracker)). Its result has flat checks and no sections. Making the
+tool call it is planned, not built. The steps below stay valid for what the tool still has to change.
 
 1. **Schema id.** Write `skellycertify.report/1.1.0` in place of `skellytracker.certify-suite/1`.
    Move `suite_version` to `details.suite_version`.
@@ -663,8 +703,8 @@ The report of `tools/certify_platform.py` of skellytracker uses the schema
    package must give a SemVer version with no `v` prefix.
 4. **Commit with no git.** Today section 1 runs `git`. A frozen app has no git. The package must
    also get its commit from metadata that the build writes.
-5. **Kind.** Add `kind`. The suite of today is the level `full`. The level `quick` is
-   `skellytracker.certify` ([3.6](#36-example-skellytracker-level-quick)).
+5. **Kind.** Add `kind`. The suite of today is the level `full`. Both levels are
+   `skellytracker.certify` ([3.6](#36-example-skellytracker)).
 6. **Host block.** Add `host` at the top level, from `probe_host()`: `os_name`, `os_release`,
    `os_version`, `os_build`, `os_label` and `arch` go to `host.os.name`, `release`, `version`,
    `build`, `label` and `arch`. The GPUs go to `host.gpus`, with `id` from `evidence.gpu_id()`.
@@ -696,7 +736,7 @@ The report of `tools/certify_platform.py` of skellytracker uses the schema
     `install-<code>`, `catalog-<ExceptionClass>`, `image-<code>`, `cleanup-<ExceptionClass>`,
     `probe-<level>-failed` and the bare exception class name.
 17. **Function.** Add a public `certify(level, progress=None, cancel=None)` for the whole package.
-    Today the suite is a tool script with consent at a terminal. It starts `sys.executable` with
+    skellytracker has it for the levels `quick` and `full`. Today the suite is a tool script with consent at a terminal. It starts `sys.executable` with
     the script path for each section. `skellytracker.core.eps.certify(key)` tests one EP and gives
     only a step name to `progress`. The new function must not ask questions, must send complete
     progress messages, must obey `cancel`, and must not start `sys.executable` with a script path.

@@ -55,8 +55,10 @@ counts with a delay. The daily cap of 200 is the hard limit.
   hold several module reports of one package. The relay checks the `id` and shows it in the issue.
   skellytracker must still write the `id`, use it as its report id, and add `pack_version` for each
   pair. The session `skellytracker-6c` has these decisions.
-- The layout of the skellytracker level `full` is not defined. `review.md` section 4 step 3 still
-  names "sections 3 and 4" for an EP with the status `field-test`.
+- The skellytracker level `full` is in the format (3.6), from skellytracker commit `03e5b3bb`.
+  `review.md` section 4 step 3 now asks for a `pass` in the check `<label>` (probe and image) for an
+  EP with the status `field-test`. Before, it asked for a pass in the old sections 3 and 4. The
+  owner must confirm that this rule is as strict as the old one.
 - The subdomain stays `dom-dd0` (decision of 2026-11-19). Step 4 of the README advises a neutral word that does not identify
   you. To change it, see the link in step 11. A change also changes the relay address.
 - The deploy warns that Preview URLs are disabled. This is intended: `preview_urls` is `false`.

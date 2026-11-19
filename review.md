@@ -59,7 +59,9 @@ Do these steps for each module report in `modules`. One module can be valid and 
    commit that is not in the public repository makes the module a record only, with the reason
    `commit-not-public`.
 3. Check the rules of the package for its own evidence (statement 7). For skellytracker, an
-   execution provider with the catalog status `field-test` needs a `pass` in sections 3 and 4.
+   execution provider with the catalog status `field-test` needs a `pass` in the check named
+   `<label>`. That check passes only when its `probe` and `image` checks pass. A timing or a JPEG
+   check never changes it.
 4. Check what the `kind` gives ([Kinds of evidence](report-format.md#72-kinds-of-evidence)):
    - A valid `full` module can give a reviewed row.
    - A valid `quick` module alone never gives a reviewed row.
