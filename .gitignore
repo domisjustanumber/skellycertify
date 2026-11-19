@@ -18,3 +18,4 @@ plans/
 # Python environment of the doc checks (uv)
 .venv/
 __pycache__/
+.vscode/

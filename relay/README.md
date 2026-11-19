@@ -135,7 +135,7 @@ the folder `relay/` of your clone, unless the step says otherwise.
 
 ## 1. Prerequisites
 
-- Node.js 20 or later, with npm. Check with `node --version`.
+- Node.js 22 or later, with npm. Check with `node --version`.
 - A clone of `domisjustanumber/skellycertify`.
 - A GitHub account that owns the repository.
 - An email address for a new Cloudflare account. No payment card is necessary for the free plan.
