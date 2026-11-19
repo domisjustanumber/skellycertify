@@ -290,8 +290,25 @@ result `not-run`, with a reason such as `ep-not-installed`, `gpu-not-usable` or 
 - The other checks of a pair are `<label>:probe` and `<label>:image`. For `cuda` and `trt-rtx` on a
   GPU there are also `<label>:jpeg-decode` and `<label>:jpeg-preprocess`.
 - `details.eps.<label>` holds `gpu` (the GPU id, for example `10de:2484`, `chip:<slug>` for
-  `coreml`, or `null`), `device` (the device key or `null`), `models`, `warnings` and `pack_version`.
-  `pack_version` is optional. Older reports of level `quick` do not have it.
+  `coreml`, or `null`), `device` (the device key or `null`; the full form, for example
+  `gpu:10de:2484:0`, not the short form of the label), `models`, `warnings` and `pack_version`.
+  `models` and `warnings` are there only when the image run gave them. A pair that is `not-run`, or
+  whose probe failed, has neither. Each item of `models` is an object with `key`, `version`, `size`,
+  `precision`, `execution_provider` and `device`. `warnings` is a sorted list of warning codes.
+  `pack_version` is `builtin` for a built-in EP (`directml`, `coreml`, `cpu`). For an EP of the
+  Windows ML catalog it is the package version of the Windows ML record (or `windows-ml`). For a
+  plugin pack it is the pack version, for example `0.2.0`. `pack_version` is optional. Older
+  reports of level `quick` do not have it.
+- The quick check compares a GPU EP with the CPU EP. `cpu` is not in the default selection. When a
+  caller names it, its checks `cpu:probe`, `cpu:image` and `cpu` are all `not-run` with the reason
+  `not-gpu-ep`. Its `details.eps.cpu` is `{"gpu": null, "device": null, "pack_version": "builtin"}`,
+  with no `models` and no `warnings`.
+- A check can also have `numbers`, for example `seconds`, `max_abs_diff`, `ep_ms`, `cpu_ms`,
+  `speed_against_cpu` and `exit_code`.
+- A child process that gave its result and did not exit cleanly adds a row `<name>:exit` with the
+  result `record-only` and the reason `hung-at-exit` or `crashed`.
+- `cuda@...` uses a plugin pack (`0.2.0`). `cuda` and `trt-rtx` pairs keep the two jpeg rows.
+  `directml` has no jpeg rows.
 - `details.versions` gives the versions one time for the report, not for each EP.
 - The name and the driver version of a GPU are only in `host.gpus`. Join `host.gpus[].id` with
   `details.eps.<label>.gpu`. Two GPUs of one model have the same id.
@@ -320,17 +337,22 @@ result `not-run`, with a reason such as `ep-not-installed`, `gpu-not-usable` or 
   {"name": "cuda@10de-2484-0:jpeg-decode", "result": "pass", "reason": null},
   {"name": "cuda@10de-2484-0:jpeg-preprocess", "result": "pass", "reason": null},
   {"name": "cuda@10de-2484-0", "result": "pass", "reason": null},
-  {"name": "cpu:probe", "result": "pass", "reason": null},
-  {"name": "cpu:image", "result": "pass", "reason": null},
-  {"name": "cpu", "result": "pass", "reason": null}
+  {"name": "directml@10de-2484-0:probe", "result": "pass", "reason": null},
+  {"name": "directml@10de-2484-0:image", "result": "pass", "reason": null},
+  {"name": "directml@10de-2484-0", "result": "pass", "reason": null}
  ],
  "cleanup": [],
  "details": {
-  "pipeline": "default@builtin",
+  "pipeline": "yolox-rtmw-wholebody@skellytracker",
   "eps": {
-   "cuda@10de-2484-0": {"gpu": "10de:2484", "device": "10de-2484-0", "models": [], "warnings": [],
-                        "pack_version": "0.2.0"},
-   "cpu": {"gpu": null, "device": null, "models": [], "warnings": [], "pack_version": "0.2.0"}
+   "cuda@10de-2484-0": {"gpu": "10de:2484", "device": "gpu:10de:2484:0",
+                        "models": [{"key": "yolox-m", "version": "1.0.0", "size": "m", "precision": "fp16",
+                                    "execution_provider": "cuda", "device": "gpu:10de:2484:0"}],
+                        "warnings": [], "pack_version": "0.2.0"},
+   "directml@10de-2484-0": {"gpu": "10de:2484", "device": "gpu:10de:2484:0",
+                            "models": [{"key": "yolox-m", "version": "1.0.0", "size": "m", "precision": "fp16",
+                                        "execution_provider": "directml", "device": "gpu:10de:2484:0"}],
+                            "warnings": [], "pack_version": "builtin"}
   },
   "versions": {"ort_distribution": "onnxruntime-windowsml", "ort_version": "1.30.0", "windowsml": "2.6.74rc0",
                "catalog_revision": "<64 hex digits>",

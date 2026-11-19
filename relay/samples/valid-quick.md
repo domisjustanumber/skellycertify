@@ -18,9 +18,9 @@ Schema `skellycertify.report/1.1.0`, app freemocap 2.0.0, created 2026-11-19T10:
 | skellytracker c1d2e3f4-5a6b-4c7d-8e9f-a0b1c2d3e4f5 | trt-rtx@10de-2484-0:image | fail | output-mismatch |
 | skellytracker c1d2e3f4-5a6b-4c7d-8e9f-a0b1c2d3e4f5 | trt-rtx@10de-2484-0:jpeg-decode | pass |  |
 | skellytracker c1d2e3f4-5a6b-4c7d-8e9f-a0b1c2d3e4f5 | trt-rtx@10de-2484-0:jpeg-preprocess | pass |  |
-| skellytracker c1d2e3f4-5a6b-4c7d-8e9f-a0b1c2d3e4f5 | cpu | pass |  |
-| skellytracker c1d2e3f4-5a6b-4c7d-8e9f-a0b1c2d3e4f5 | cpu:probe | pass |  |
-| skellytracker c1d2e3f4-5a6b-4c7d-8e9f-a0b1c2d3e4f5 | cpu:image | pass |  |
+| skellytracker c1d2e3f4-5a6b-4c7d-8e9f-a0b1c2d3e4f5 | directml@10de-2484-0 | pass |  |
+| skellytracker c1d2e3f4-5a6b-4c7d-8e9f-a0b1c2d3e4f5 | directml@10de-2484-0:probe | pass |  |
+| skellytracker c1d2e3f4-5a6b-4c7d-8e9f-a0b1c2d3e4f5 | directml@10de-2484-0:image | pass |  |
 
 This file is a sample for the relay tests. It holds example values only.
 
@@ -98,17 +98,23 @@ This file is a sample for the relay tests. It holds example values only.
    ],
    "cleanup": [],
    "details": {
-    "pipeline": "rtmpose-wholebody-m@catalog",
+    "pipeline": "yolox-rtmw-wholebody@skellytracker",
     "eps": {
      "cuda@10de-2484-0": {
       "gpu": "10de:2484",
       "device": "gpu:10de:2484:0",
       "models": [
-       "rtmdet-m",
-       "rtmpose-wholebody-m"
+       {
+        "key": "yolox-m",
+        "version": "1.0.0",
+        "size": "m",
+        "precision": "fp16",
+        "execution_provider": "cuda",
+        "device": "gpu:10de:2484:0"
+       }
       ],
       "warnings": [],
-      "pack_version": "1.0.0"
+      "pack_version": "0.2.0"
      }
     },
     "versions": {
@@ -188,44 +194,56 @@ This file is a sample for the relay tests. It holds example values only.
      "reason": null
     },
     {
-     "name": "cpu",
+     "name": "directml@10de-2484-0",
      "result": "pass",
      "reason": null
     },
     {
-     "name": "cpu:probe",
+     "name": "directml@10de-2484-0:probe",
      "result": "pass",
      "reason": null
     },
     {
-     "name": "cpu:image",
+     "name": "directml@10de-2484-0:image",
      "result": "pass",
      "reason": null
     }
    ],
    "cleanup": [],
    "details": {
-    "pipeline": "rtmpose-wholebody-m@catalog",
+    "pipeline": "yolox-rtmw-wholebody@skellytracker",
     "eps": {
      "trt-rtx@10de-2484-0": {
       "gpu": "10de:2484",
       "device": "gpu:10de:2484:0",
       "models": [
-       "rtmdet-m",
-       "rtmpose-wholebody-m"
+       {
+        "key": "yolox-m",
+        "version": "1.0.0",
+        "size": "m",
+        "precision": "fp16",
+        "execution_provider": "trt-rtx",
+        "device": "gpu:10de:2484:0"
+       }
       ],
       "warnings": [],
-      "pack_version": "1.0.0"
+      "pack_version": "0.2.0"
      },
-     "cpu": {
-      "gpu": null,
-      "device": "cpu",
+     "directml@10de-2484-0": {
+      "gpu": "10de:2484",
+      "device": "gpu:10de:2484:0",
       "models": [
-       "rtmdet-m",
-       "rtmpose-wholebody-m"
+       {
+        "key": "yolox-m",
+        "version": "1.0.0",
+        "size": "m",
+        "precision": "fp16",
+        "execution_provider": "directml",
+        "device": "gpu:10de:2484:0"
+       }
       ],
       "warnings": [],
-      "pack_version": "1.0.0"
+      "pack_version": "builtin"
      }
     },
     "versions": {
