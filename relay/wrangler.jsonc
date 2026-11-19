@@ -15,7 +15,7 @@
     }
   },
   "vars": {
-    "RELAY_ENABLED": "false",
+    "RELAY_ENABLED": "true",
     "TEST_MODE": "false",
     "GITHUB_REPO": "domisjustanumber/skellycertify",
     "GITHUB_API_URL": "https://api.github.com"

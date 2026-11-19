@@ -1,17 +1,18 @@
 # Relay setup progress
 
-Last update: 2026-11-19. This file is a handover note for Part 1 of [README.md](README.md). Delete it
-when Part 1 is finished.
+Last update: 2026-11-19. This file is a handover note for the relay set-up in [README.md](README.md). Part 1 and Part 2 are
+done. Delete it when the open points are closed.
 
 ## State
 
-- The relay is deployed and switched off: `https://skellycertify-relay.dom-dd0.workers.dev`
-  (version `2563aa25-90dd-4b6f-819e-df61ce3ce93a`, Wrangler 4.157.0).
-- `wrangler.jsonc`: `RELAY_ENABLED` `"false"`, `TEST_MODE` `"false"`. `/health` agrees. A POST gets
-  503 `relay-off`.
-- The relay stays off until Part 2 is done (decision of 2026-11-19). The first real send from
-  freemocap waits for that. To switch it on: set `RELAY_ENABLED` to `"true"` and deploy.
-- Cloudflare secrets set: `GITHUB_TOKEN` (personal fine-grained token, 30 days) and `RATE_SALT`.
+- The relay is deployed and switched on, with test mode off:
+  `https://skellycertify-relay.dom-dd0.workers.dev` (version `2e6e0b63-174a-4c79-b291-e49667ce0b65`,
+  Wrangler 4.157.0). `/health`: `enabled` true, `test_mode` false.
+- A valid report now files a real issue. Do not send `samples/valid.md` or `samples/valid-quick.md`.
+  For a connection test, send `samples/refused-format.md` (422, nothing on GitHub).
+- The relay files as the GitHub App `skellycertify-relay[bot]`. Cloudflare secrets set:
+  `GITHUB_APP_CLIENT_ID`, `GITHUB_APP_INSTALLATION_ID`, `GITHUB_APP_PRIVATE_KEY` and `RATE_SALT`.
+  The personal token is deleted.
 - Wrangler login has only `account:read`, `user:read`, `workers_scripts:write` and
   `offline_access`. Deploy and `secret list` work with these scopes.
 
@@ -32,11 +33,11 @@ when Part 1 is finished.
 | 18. Logs | Done: `wrangler tail --format pretty` works with the reduced scopes. It shows the request line (method, URL, status) and the relay log line. No headers or report text seen. |
 | 19. Token rotation | Not necessary now. |
 | 20. Clean up | Done: issue 1 closed as not planned, `inbox/test/` deleted, `TEST_MODE` `"false"` deployed. |
-| Part 2 (GitHub App) | Not started. |
+| Part 2 (GitHub App) | Done 2026-11-19: in test mode, issue 2 and two commits came from `skellycertify-relay[bot]`. Issue 2 is closed and the test files are deleted. The permissions of the app and its one repository were not checked through the API. |
 
 ## Next
 
-1. Part 2, then switch the relay on. The personal token expires 30 days after its creation.
+1. freemocap sends the first real report when its hand-in UI exists.
 
 Live checks: 413 (262,145 bytes) and 404 (unknown route) work. The live 429 works, but late: of 12
 POSTs of `samples/refused-format.md` in one second, the first 8 got 422 and the last 4 got 429
@@ -45,7 +46,8 @@ counts with a delay. The daily cap of 200 is the hard limit.
 
 ## Things that exist now and need clean-up later
 
-- Issue 1 in `domisjustanumber/skellycertify` is closed (not planned). It keeps the label `relay-test`.
+- Issues 1 and 2 in `domisjustanumber/skellycertify` are closed (not planned). They keep the label
+  `relay-test`.
 - The branch `inbox` exists and holds no files. Keep it or delete it. The relay makes it again.
 - `relay/.dev.vars` with the fake local values. Git ignores it. The README says to delete it.
 
