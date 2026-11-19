@@ -35,10 +35,11 @@ characters of the hash.
 The relay builds the issue only from the facts of the JSON block, and from the note:
 
 - Title: `[certify] <app or package> <version> · <OS label> · <GPU model names>`.
-- One line for each module: valid or not valid as evidence, with the reason codes.
-- A table: module, section or check, result, reason. The table comes from the JSON, not from the
-  Markdown part. If the body is longer than 65,536 characters, the relay shortens the table and
-  says so.
+- One line for each module: valid or not valid as evidence, with the reason codes. The line shows
+  the `id` of the module when it has one.
+- A table: module (with its `id`, if any), section or check, result, reason. The table comes from
+  the JSON, not from the Markdown part. If the body is longer than 65,536 characters, the relay
+  shortens the table and says so.
 - The note as a quote, at most 2000 characters.
 - The link to the file, the SHA-256 and a hidden marker `<!-- skellycertify-report sha256:<hash> -->`.
 
@@ -120,7 +121,7 @@ writes. So each POST counts against the two bindings, also a refused POST and a 
 | `src/github.js` | The GitHub client: the token or the GitHub App, the REST calls and the daily count. |
 | `src/ratelimit.js` | The per-sender and burst limits (Rate Limiting bindings). |
 | `test/` | Unit tests. They use a fake GitHub and need no network. |
-| `samples/` | `valid.md`, `refused-privacy.md` (rule 1) and `refused-format.md` (schema 2). |
+| `samples/` | `valid.md`, `valid-quick.md` (two quick runs of one package), `refused-privacy.md` (rule 1) and `refused-format.md` (schema 2). |
 | `scripts/send-sample.mjs` | Send a file to a relay and print the answer. |
 | `scripts/fake-github.mjs` | A fake GitHub API for a local run. |
 | `wrangler.jsonc` | The Worker configuration. It holds no secret and no account id. |

@@ -5,10 +5,12 @@ when Part 1 is finished.
 
 ## State
 
-- The relay is deployed, with test mode off: `https://skellycertify-relay.dom-dd0.workers.dev`
-  (version `4592696e-6a6f-4269-bae9-954f8e1b536e`, Wrangler 4.157.0).
-- `wrangler.jsonc`: `RELAY_ENABLED` `"true"`, `TEST_MODE` `"false"`. `/health` agrees.
-- Do not send a report now. It would file a real issue.
+- The relay is deployed and switched off: `https://skellycertify-relay.dom-dd0.workers.dev`
+  (version `2563aa25-90dd-4b6f-819e-df61ce3ce93a`, Wrangler 4.157.0).
+- `wrangler.jsonc`: `RELAY_ENABLED` `"false"`, `TEST_MODE` `"false"`. `/health` agrees. A POST gets
+  503 `relay-off`.
+- The relay stays off until Part 2 is done (decision of 2026-11-19). The first real send from
+  freemocap waits for that. To switch it on: set `RELAY_ENABLED` to `"true"` and deploy.
 - Cloudflare secrets set: `GITHUB_TOKEN` (personal fine-grained token, 30 days) and `RATE_SALT`.
 - Wrangler login has only `account:read`, `user:read`, `workers_scripts:write` and
   `offline_access`. Deploy and `secret list` work with these scopes.
@@ -34,7 +36,7 @@ when Part 1 is finished.
 
 ## Next
 
-1. Part 2 before volunteers use the relay. The personal token expires 30 days after its creation.
+1. Part 2, then switch the relay on. The personal token expires 30 days after its creation.
 
 Live checks: 413 (262,145 bytes) and 404 (unknown route) work. The live 429 works, but late: of 12
 POSTs of `samples/refused-format.md` in one second, the first 8 got 422 and the last 4 got 429
@@ -49,7 +51,13 @@ counts with a delay. The daily cap of 200 is the hard limit.
 
 ## Open points
 
-- The subdomain is `dom-dd0`. Step 4 of the README advises a neutral word that does not identify
+- Format 1.1.0 (2026-11-19): a module report can have an `id` (a version 4 UUID), and a file can
+  hold several module reports of one package. The relay checks the `id` and shows it in the issue.
+  skellytracker must still write the `id`, use it as its report id, and add `pack_version` for each
+  pair. The session `skellytracker-6c` has these decisions.
+- The layout of the skellytracker level `full` is not defined. `review.md` section 4 step 3 still
+  names "sections 3 and 4" for an EP with the status `field-test`.
+- The subdomain stays `dom-dd0` (decision of 2026-11-19). Step 4 of the README advises a neutral word that does not identify
   you. To change it, see the link in step 11. A change also changes the relay address.
 - The deploy warns that Preview URLs are disabled. This is intended: `preview_urls` is `false`.
 - The README steps for the dashboard (**Compute** > **Workers & Pages**) and for the reduced login

@@ -12,9 +12,11 @@ const inDetails = (value) => {
   return privacyRule(md, d);
 };
 
-test('the valid sample keeps every rule', () => {
-  const { markdown, data } = parseReport(sample('valid.md'));
-  assert.equal(privacyRule(markdown, data), 0);
+test('the valid samples keep every rule', () => {
+  for (const name of ['valid.md', 'valid-quick.md']) {
+    const { markdown, data } = parseReport(sample(name));
+    assert.equal(privacyRule(markdown, data), 0, name);
+  }
 });
 
 test('the privacy sample breaks rule 1', () => {

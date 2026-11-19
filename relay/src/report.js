@@ -13,6 +13,7 @@ export const SCHEMA_MAJOR = 1;
 const SCHEMA_RE = /^skellycertify\.report\/1\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 const UTC_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/;
 const CHECK_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9_.:@-]{0,127}$/;
+const ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/; // a version 4 UUID in lower case
 const KINDS = ['quick', 'full', 'passive'];
 const RESULTS = ['pass', 'fail', 'not-run', 'record-only'];
 
@@ -60,6 +61,9 @@ function checkRow(row, where, hasSections, isCleanup) {
 function checkModule(m, where) {
   if (!isObj(m)) throw new Refused('bad-value', where);
   need(m, 'schema', where, (v) => str(v) && SCHEMA_RE.test(v), 'wrong-schema');
+  // Two modules may have the same id. A repeat only makes the issue harder to read, and a refusal
+  // would block a hand-in the user cannot fix.
+  if ('id' in m) need(m, 'id', where, (v) => str(v) && ID_RE.test(v));
   const pkg = need(m, 'package', where, isObj);
   need(pkg, 'name', `${where}.package`, str);
   need(pkg, 'version', `${where}.package`, str);

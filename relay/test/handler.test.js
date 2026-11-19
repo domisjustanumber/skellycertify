@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { generateKeyPairSync, webcrypto } from 'node:crypto';
 import { handle, MAX_BYTES } from '../src/handler.js';
 import { createFakeGitHub } from '../scripts/fake-github.mjs';
+import { BODY_LIMIT } from '../src/issue.js';
 import { sample, validData, reportFile, makeEnv, post, fakeLimiter } from './helpers.js';
 
 const VALID = sample('valid.md');
@@ -52,6 +53,16 @@ test('a valid report: file on inbox, one issue, a sidecar, and the JSON answer',
     assert.equal(call.headers['X-GitHub-Api-Version'], '2022-11-28');
     assert.equal(call.headers['User-Agent'], 'skellycertify-relay');
   }
+});
+
+test('the quick sample: two modules of one package with their ids make one issue', async () => {
+  const gh = createFakeGitHub();
+  const r = await send(makeEnv(), gh, post(sample('valid-quick.md')));
+  assert.equal(r.res.status, 200);
+  const { body } = gh.state.issues[0];
+  assert.ok(body.length <= BODY_LIMIT);
+  assert.match(body, /· id `3f2b8c1e-9a4d-4e7b-b6a1-0c5d2e8f7a90`: valid as evidence\./);
+  assert.match(body, /· id `c1d2e3f4-5a6b-4c7d-8e9f-a0b1c2d3e4f5`: not valid as evidence: `check-failed`\./);
 });
 
 test('the log line holds only time, outcome, status, size and the hash prefix', async () => {

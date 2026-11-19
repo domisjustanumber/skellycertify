@@ -1,6 +1,6 @@
 # Report format
 
-**Status:** draft. Format version 1.0.0.
+**Status:** draft. Format version 1.1.0.
 
 This document is the contract between the freemocap packages, the freemocap app and this
 repository. Each package implements it in its own code. There is no shared code package.
@@ -212,7 +212,8 @@ the questions and puts the answers in `answers`.
 
 | Field | Type | Required | Meaning |
 |---|---|---|---|
-| `schema` | string | yes | `skellycertify.report/1.0.0` ([section 8](#8-versioning-of-the-format)). |
+| `schema` | string | yes | `skellycertify.report/1.1.0` ([section 8](#8-versioning-of-the-format)). |
+| `id` | string | no | A version 4 UUID in the lower-case form with hyphens (36 characters), for example `3f2b8c1e-9a4d-4e7b-b6a1-0c5d2e8f7a90`. The package gives it when it saves the report. It is unique in a report file. It holds no time and no machine data. A version 1 UUID is forbidden, because it holds the MAC address. A report that was not saved can have no `id`. |
 | `package` | object | yes | See [3.2](#32-package). |
 | `kind` | string | yes | `quick`, `full` or `passive` ([7.2](#72-kinds-of-evidence)). `passive` is reserved for a record that the package gathers from normal use ([7.3](#73-the-passive-record-reserved)). Its fields are not yet defined. A writer must not write `passive` in this version. |
 | `created_utc` | string | yes | The start of the run, `YYYY-MM-DDTHH:MM:SSZ`. |
@@ -271,18 +272,37 @@ under `details`.
 | `seconds`, `exit_code` | no | The time and the exit code of the child process of the section. |
 | `details` | no | Facts of the section. They obey [section 6](#6-privacy-rules). |
 
-### 3.6 Example: skellytracker, level `full`
+### 3.6 Example: skellytracker, level `quick`
 
-This example shows only sections 1 and 3, and only some of their checks. The field names in
-`details` are the field names of skellytracker today. The CPU name and the commit are example
-values.
+This is the layout of skellytracker for the level `quick`. The layout of the level `full` is not
+defined yet. It will be added when the level is built. Today `full` returns one check `full` with
+the result `not-run` and the reason `not-built`, and writes no file. The layout of `details` is the
+layout of the package. The CPU name, the commit and the id are example values.
+
+One report is one `certify()` call. It covers each selected pair of an execution provider (EP) and
+a GPU. An EP that was not selected is not in the report. A selected pair that cannot run has the
+result `not-run`, with a reason such as `ep-not-installed`, `gpu-not-usable` or `not-gpu-ep`.
+
+- The label of a pair is `<ep>@<device>`, for example `cuda@10de-2484-0`. It is the plain `<ep>`
+  for an EP with no GPU and for `coreml`.
+- A check name with no `:` is the row of the pair. It passes only when its `probe` and `image`
+  checks pass.
+- The other checks of a pair are `<label>:probe` and `<label>:image`. For `cuda` and `trt-rtx` on a
+  GPU there are also `<label>:jpeg-decode` and `<label>:jpeg-preprocess`.
+- `details.eps.<label>` holds `gpu` (the GPU id, for example `10de:2484`, `chip:<slug>` for
+  `coreml`, or `null`), `device` (the device key or `null`), `models`, `warnings` and `pack_version`.
+  `pack_version` is optional. Older reports of level `quick` do not have it.
+- `details.versions` gives the versions one time for the report, not for each EP.
+- The name and the driver version of a GPU are only in `host.gpus`. Join `host.gpus[].id` with
+  `details.eps.<label>.gpu`. Two GPUs of one model have the same id.
 
 ```json
 {
- "schema": "skellycertify.report/1.0.0",
+ "schema": "skellycertify.report/1.1.0",
+ "id": "3f2b8c1e-9a4d-4e7b-b6a1-0c5d2e8f7a90",
  "package": {"name": "skellytracker", "version": "2.0.0", "commit": "0123456789abcdef0123456789abcdef01234567",
              "tree_modified": false},
- "kind": "full",
+ "kind": "quick",
  "created_utc": "2026-11-19T10:00:00Z",
  "host": {
   "os": {"name": "Windows", "release": "11", "version": "10.0.26300", "build": 26300,
@@ -294,42 +314,29 @@ values.
     "vram_bytes": 8589934592}
   ]
  },
- "sections": [
-  {"id": "1", "name": "Checkout and versions", "result": "pass", "reason": null, "seconds": 3.1, "exit_code": 0,
-   "summary": "tree clean; Python 3.13.18; 0 package(s) differ from uv.lock",
-   "details": {"onnx_stack": {"ort_distributions": {"onnxruntime-windowsml": "1.30.0.202609102321"},
-                              "ort_version": "1.30.0", "windowsml": "2.6.74rc0",
-                              "catalog_revision": "<64 hex digits>",
-                              "set_hash": "4abfaa7678817ed4a8ccb5f3e355ba28672589e8a3468bb6805e491dfe03a302",
-                              "ort_disable_telemetry": "1"}}},
-  {"id": "3", "name": "EPs: install, verify and certify", "result": "pass", "reason": null, "seconds": 41.2, "exit_code": 0,
-   "summary": "trt-rtx pass, cuda pass, cpu pass; 3 not run",
-   "details": {"hardware_class": "nvidia-cc80-r580", "store": "isolated",
-               "eps": {"cuda": {"pack_id": "cuda-cu13", "pack_version": "0.2.0", "download_bytes": 1009000000,
-                                "source": "network", "install": "ok", "certify_result": "pass",
-                                "probe": {"ok": true, "level": "L3", "max_abs_diff": 0.0009},
-                                "gpu": {"vendor": "nvidia", "name": "NVIDIA GeForce RTX 3070", "id": "10de:2484",
-                                        "driver_version": "610.88", "compute_capability": "8.6"},
-                                "versions": {"ort_distribution": "onnxruntime-windowsml",
-                                             "ort_version": "1.30.0.202609102321", "windowsml": "2.6.74rc0",
-                                             "catalog_revision": "<64 hex digits>",
-                                             "set_hash": "4abfaa7678817ed4a8ccb5f3e355ba28672589e8a3468bb6805e491dfe03a302"},
-                                "result": "pass", "reason_code": null, "seconds": 18.4, "ort_version": "1.30.0"}}}}
- ],
  "checks": [
-  {"section": "1", "name": "checkout", "result": "pass", "reason": null, "numbers": {"changed_files": 0}},
-  {"section": "1", "name": "python", "result": "pass", "reason": null},
-  {"section": "1", "name": "packages", "result": "pass", "reason": null, "numbers": {"differ": 0, "pinned": 141}},
-  {"section": "1", "name": "telemetry-switch", "result": "pass", "reason": null},
-  {"section": "3", "name": "trt-rtx", "result": "pass", "reason": null},
-  {"section": "3", "name": "cuda", "result": "pass", "reason": null},
-  {"section": "3", "name": "amdgpu", "result": "not-run", "reason": "not-offered"},
-  {"section": "3", "name": "migraphx", "result": "not-run", "reason": "os"},
-  {"section": "3", "name": "cpu", "result": "pass", "reason": null}
+  {"name": "cuda@10de-2484-0:probe", "result": "pass", "reason": null},
+  {"name": "cuda@10de-2484-0:image", "result": "pass", "reason": null},
+  {"name": "cuda@10de-2484-0:jpeg-decode", "result": "pass", "reason": null},
+  {"name": "cuda@10de-2484-0:jpeg-preprocess", "result": "pass", "reason": null},
+  {"name": "cuda@10de-2484-0", "result": "pass", "reason": null},
+  {"name": "cpu:probe", "result": "pass", "reason": null},
+  {"name": "cpu:image", "result": "pass", "reason": null},
+  {"name": "cpu", "result": "pass", "reason": null}
  ],
  "cleanup": [],
- "details": {"suite_version": 1, "selected": [1, 2, 3, 4, 5, 6, 7],
-             "telemetry_database": {"before": false, "after": false}, "scrub": {"exempted_terms": 0}},
+ "details": {
+  "pipeline": "default@builtin",
+  "eps": {
+   "cuda@10de-2484-0": {"gpu": "10de:2484", "device": "10de-2484-0", "models": [], "warnings": [],
+                        "pack_version": "0.2.0"},
+   "cpu": {"gpu": null, "device": null, "models": [], "warnings": [], "pack_version": "0.2.0"}
+  },
+  "versions": {"ort_distribution": "onnxruntime-windowsml", "ort_version": "1.30.0", "windowsml": "2.6.74rc0",
+               "catalog_revision": "<64 hex digits>",
+               "set_hash": "4abfaa7678817ed4a8ccb5f3e355ba28672589e8a3468bb6805e491dfe03a302"},
+  "scrub": {"exempted_terms": 0}
+ },
  "evidence": {"valid": true, "reasons": []}
 }
 ```
@@ -342,12 +349,14 @@ One report file holds one JSON object:
 
 | Field | Meaning |
 |---|---|
-| `schema` | `skellycertify.report/1.0.0`. |
+| `schema` | `skellycertify.report/1.1.0`. |
 | `app` | `name`, `version` (SemVer) and `commit` of the app, or `null` for a report of one package that ran alone. |
-| `modules` | A list of module reports, one for each package. |
+| `modules` | A list of module reports. The list holds at least one module report. A package can give more than one module report, for example one for each run. Each module report is independent ([7.1](#71-validity)). |
 | `note` | The one free-text note of the person, or `null`. At most 2000 characters. |
 
 The app calls `certify()` of each package and puts each result in `modules`.
+An app can put more than one report of one package in one file, for example each report not yet
+handed in.
 A package that runs alone, from its own clone, writes the same file with one module and
 `"app": null`.
 
@@ -399,13 +408,15 @@ Rules for a reader:
 - A writer writes `\n` line ends. A reader (the relay, a tool of the reviewer) accepts `\r\n`. It
   replaces each `\r\n` with `\n` before each check and before it computes a hash. The relay commits
   the file with `\n` line ends. A `\r` that is not part of `\r\n` makes the file not valid.
+- If a module report has `id`, it must be a version 4 UUID in the lower-case form with hyphens. The
+  relay shows the `id` in the issue. The relay refuses a report whose `id` has another form.
 
 ### 4.3 Example
 
 ````markdown
 # Certify report
 
-Schema `skellycertify.report/1.0.0`, app freemocap 2.0.0, created 2026-11-19T10:00:00Z (UTC).
+Schema `skellycertify.report/1.1.0`, app freemocap 2.0.0, created 2026-11-19T10:00:00Z (UTC).
 
 **skellytracker 2.0.0:** valid as evidence.
 **skellycam 1.0.0:** not valid as evidence: modified-tree.
@@ -420,11 +431,11 @@ Schema `skellycertify.report/1.0.0`, app freemocap 2.0.0, created 2026-11-19T10:
 
 ```json
 {
- "schema": "skellycertify.report/1.0.0",
+ "schema": "skellycertify.report/1.1.0",
  "app": {"name": "freemocap", "version": "2.0.0", "commit": "89abcdef0123456789abcdef0123456789abcdef"},
  "modules": [
-  {"schema": "skellycertify.report/1.0.0", "package": {"name": "skellytracker", "...": "..."}},
-  {"schema": "skellycertify.report/1.0.0", "package": {"name": "skellycam", "...": "..."}}
+  {"schema": "skellycertify.report/1.1.0", "package": {"name": "skellytracker", "...": "..."}},
+  {"schema": "skellycertify.report/1.1.0", "package": {"name": "skellycam", "...": "..."}}
  ],
  "note": null
 }
@@ -601,6 +612,12 @@ the capture backend and the OS. Camera evidence is not part of an EP row.
 - A reader refuses a report of another major version.
 - The module reports and the report file of one run use the same schema id.
 
+Changes of the format:
+
+- 1.1.0: A module report can have the optional field `id` ([3.1](#31-fields)). A report file can
+  hold more than one module report of one package ([4.1](#41-content)).
+- 1.0.0: The first version.
+
 ## 9. Packages
 
 These are the only packages of this format.
@@ -615,7 +632,7 @@ These are the only packages of this format.
 The report of `tools/certify_platform.py` of skellytracker uses the schema
 `skellytracker.certify-suite/1`. These changes make it a module report of this format:
 
-1. **Schema id.** Write `skellycertify.report/1.0.0` in place of `skellytracker.certify-suite/1`.
+1. **Schema id.** Write `skellycertify.report/1.1.0` in place of `skellytracker.certify-suite/1`.
    Move `suite_version` to `details.suite_version`.
 2. **Package block.** Add `package` with `name`, `version`, `commit` and `tree_modified`. Today the
    commit and the clean state are in `details.checkout` of section 1, and the report records no
@@ -624,8 +641,8 @@ The report of `tools/certify_platform.py` of skellytracker uses the schema
    package must give a SemVer version with no `v` prefix.
 4. **Commit with no git.** Today section 1 runs `git`. A frozen app has no git. The package must
    also get its commit from metadata that the build writes.
-5. **Kind.** Add `kind`. The suite of today is the level `full`. The level `quick` does not exist
-   yet.
+5. **Kind.** Add `kind`. The suite of today is the level `full`. The level `quick` is
+   `skellytracker.certify` ([3.6](#36-example-skellytracker-level-quick)).
 6. **Host block.** Add `host` at the top level, from `probe_host()`: `os_name`, `os_release`,
    `os_version`, `os_build`, `os_label` and `arch` go to `host.os.name`, `release`, `version`,
    `build`, `label` and `arch`. The GPUs go to `host.gpus`, with `id` from `evidence.gpu_id()`.

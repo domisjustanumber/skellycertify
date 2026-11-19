@@ -100,3 +100,16 @@ test('many modules: at most 100 module lines', () => {
   assert.match(body, /- and 50 more modules/);
   assert.ok(body.length <= BODY_LIMIT);
 });
+
+test('the id of each module is in its module line and in the first cell of its rows', () => {
+  const d = validData();
+  const a = '3f2b8c1e-9a4d-4e7b-b6a1-0c5d2e8f7a90';
+  const b = 'c1d2e3f4-5a6b-4c7d-8e9f-a0b1c2d3e4f5';
+  d.modules = [{ ...d.modules[0], id: a }, { ...validData().modules[0], id: b, evidence: { valid: false, reasons: ['check-failed'] } }];
+  const body = buildBody(args(d));
+  assert.match(body, new RegExp(`^- \`skellytracker\` \`2\.0\.0\` · id \`${a}\`: valid as evidence\.$`, 'm'));
+  assert.match(body, new RegExp(`^- \`skellytracker\` \`2\.0\.0\` · id \`${b}\`: not valid as evidence: \`check-failed\`\.$`, 'm'));
+  const rows = body.split('\n').filter((l) => l.startsWith('| `skellytracker`'));
+  assert.equal(rows.length, 4);
+  assert.deepEqual(rows.map((r) => r.split(' | ')[0]), [a, a, b, b].map((id) => `| \`skellytracker\` \`${id}\``));
+});

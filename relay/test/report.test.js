@@ -110,3 +110,19 @@ test('a check needs no section when the module has no sections', () => {
   d.modules[0].checks.forEach((c) => delete c.section);
   assert.ok(parseReport(reportFile(d)));
 });
+
+test('id: optional; when present a version 4 UUID in lower case; a repeat is allowed', () => {
+  const ID = '3f2b8c1e-9a4d-4e7b-b6a1-0c5d2e8f7a90';
+  const d = validData();
+  d.modules[0].id = ID;
+  assert.ok(parseReport(reportFile(d)));
+  for (const id of [ID.toUpperCase(), ID.replace(/-/g, ''), '3f2b8c1e-9a4d-1e7b-b6a1-0c5d2e8f7a90', 42, '', null]) {
+    const e = validData();
+    e.modules[0].id = id;
+    refused(reportFile(e), 'bad-value', 'report.modules[0].id');
+  }
+  assert.ok(parseReport(reportFile(validData())), 'no id');
+  const two = validData();
+  two.modules = [{ ...two.modules[0], id: ID }, { ...two.modules[0], id: ID }];
+  assert.ok(parseReport(reportFile(two)), 'the same id twice');
+});

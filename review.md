@@ -28,7 +28,7 @@ relay is not the reviewer.
 ## 2. Check the form
 
 1. The file must end with one fenced `json` block. The block must parse as JSON.
-2. `schema` must have the major version 1, for example `skellycertify.report/1.0.0`.
+2. `schema` must have the major version 1, for example `skellycertify.report/1.1.0`.
 3. The object must have `app`, `modules` and `note`. Each module report must have the required
    fields of [section 3](report-format.md#3-the-module-report).
 
@@ -79,6 +79,8 @@ Commit each report that passed [section 3](#3-check-privacy), also a report that
      `reports/freemocap/2026/20261119T100000Z-12.md`.
    - `<name>` is `package.name` of the one module of a report of one package, for example
      `reports/skellytracker/2026/20261119T100000Z-13.md`.
+   - `<name>` is `package.name` of the first module of a report of one package with several
+     modules.
    - `<yyyy>` and `<yyyymmddThhmmssZ>` come from `created_utc` of the first module.
    - `<issue>` is the issue number.
 2. Commit the file byte for byte, as the person sent it, with LF line ends. Do not make other
@@ -114,7 +116,7 @@ Commit each report that passed [section 3](#3-check-privacy), also a report that
 2. Add the label `record-only`. Close the issue.
 
 When one module is accepted and another is a record only, give the two answers in one comment.
-Add the two labels.
+Add the two labels. Name each module by its `id` when it has one.
 
 ### 6.3 A report that you cannot read
 
@@ -148,17 +150,17 @@ Write one row for each execution provider and GPU model of the report, also for 
 
 | Row field | Where it comes from in the module report |
 |---|---|
-| `ep` | The EP key: the check name in section 3, for example `cuda`. |
+| `ep` | The part of the key of `details.eps` before `@`, for example `cuda` in `cuda@10de-2484-0`. The whole key when it has no `@`. Below, `<label>` is that key. |
 | `os` | `host.os.name`, for example `Windows`. |
-| `gpu` | `details.eps.<key>.gpu.id` of section 3, for example `10de:2484`. |
-| `set` | `details.onnx_stack.set_hash` of section 1. It must equal the set hash that `tools/onnx_stack.py check` prints in the target checkout. |
+| `gpu` | `details.eps["<label>"].gpu`, for example `10de:2484`. |
+| `set` | `details.versions.set_hash`. It must equal the set hash that `tools/onnx_stack.py check` prints in the target checkout. |
 | `source` | `field` for a report from this repository. This is the mark of field evidence. |
-| `result` | `pass` or `fail`: the result of the EP in sections 3 and 4. |
+| `result` | `pass` or `fail`: the result of the check named `<label>`. |
 | `catalog_package` | Only for an EP of the Windows ML catalog: the package version of that catalog, as a string. |
-| `pack` | `details.eps.<key>.pack_version` of section 3. |
-| `ort` | `details.eps.<key>.versions.ort_version` of section 3. |
-| `windowsml` | `details.eps.<key>.versions.windowsml` of section 3, or `null`. |
-| `driver` | `details.eps.<key>.gpu.driver_version` of section 3. |
+| `pack` | `details.eps["<label>"].pack_version`. When it is absent, look it up in the catalog of the package at `package.commit`, with `details.versions.catalog_revision`. |
+| `ort` | `details.versions.ort_version`. |
+| `windowsml` | `details.versions.windowsml`, or `null`. |
+| `driver` | `host.gpus[].driver_version` of the GPU whose `id` is `details.eps["<label>"].gpu`. |
 | `os_build` | `host.os.build`. |
 | `os_label` | `host.os.label`. |
 

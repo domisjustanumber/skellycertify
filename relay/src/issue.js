@@ -39,7 +39,7 @@ export function buildTitle(data) {
 }
 
 function moduleLine(m) {
-  const head = `- ${code(m.package.name, 60)} ${code(m.package.version, 60)}:`;
+  const head = `- ${code(m.package.name, 60)} ${code(m.package.version, 60)}${m.id ? ` · id ${code(m.id, 36)}` : ''}:`;
   if (m.evidence.valid === true && m.evidence.reasons.length === 0) return `${head} valid as evidence.`;
   const reasons = m.evidence.reasons.map((r) => code(r, 80)).join(', ');
   return `${head} not valid as evidence${reasons ? `: ${reasons}` : ''}.`;
@@ -49,7 +49,7 @@ function moduleLine(m) {
 function tableRows(data) {
   const rows = [];
   for (const m of data.modules) {
-    const name = code(m.package.name, 60);
+    const name = `${code(m.package.name, 60)}${m.id ? ` ${code(m.id, 36)}` : ''}`;
     if (Array.isArray(m.sections)) {
       for (const s of m.sections) rows.push(`| ${name} | ${code(`${s.id}. ${s.name}`, 80)} | ${code(s.result, 20)} | ${code(s.reason, 80)} |`);
     } else {
