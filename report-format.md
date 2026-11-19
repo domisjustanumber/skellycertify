@@ -424,7 +424,7 @@ The order of the checks of a full report:
   run, with the sha256 check, and runs the probe on it. It has one row `suite:packs:<EP key>`, or
   `suite:packs:<EP key>@<device>` for an EP with no pack that runs on each GPU. In this row,
   `<device>` is the full device key, for example `suite:packs:directml@gpu:10de:2484:0`. The label
-  of the pair has the short form, `directml@10de-2484-0`. It does not touch the
+  of the pair has the short form, `directml@10de-2484-0`. `suite:packs` does not touch the
   EP store of the person. The checks of `certify("full")` in a tool report run on that new store, so
   the pair checks say that a new install from the catalog works.
 - `details.suite` holds `version`, `selected`, `sections.<slug>` (`summary`, `seconds`, `details`),
