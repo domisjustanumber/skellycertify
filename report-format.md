@@ -18,8 +18,14 @@ repository. Each package implements it in its own code. There is no shared code 
 | reason code | A short fixed code that tells why a check has its result, for example `timed-out`. |
 | evidence row | A reviewed row in the package that owns the result. The app reads it to show "certified". |
 | kind | The kind of a module report: `quick`, `full` or `passive`. |
+| public repository | The repository of a package where a commit counts as public ([section 9](#9-packages)). |
 
 ## 2. The function
+
+This section is the contract between an app and a package. A stand-alone tool of a package, for
+example `tools/certify_platform.py` of skellytracker, is not bound by it. The tool can show its own
+plan and ask its own questions. Its report file must still obey [section 3](#3-the-module-report)
+and [section 4](#4-the-report-file).
 
 ### 2.1 Signature
 
@@ -649,7 +655,7 @@ A module report is valid as evidence only when each of these statements is true:
 
 The writer cannot check statement 8. The reviewer checks it:
 
-8. `package.commit` is a commit in the public repository of the package. Else the module is a
+8. `package.commit` is a commit in the [public repository of the package](#9-packages). Else the module is a
    record only. The reviewer gives the reason `commit-not-public` on the issue.
 
 Any build can give evidence when each module records its version and its commit: a release, a
@@ -719,3 +725,7 @@ These are the only packages of this format.
 |---|---|---|---|---|
 | skellytracker | execution providers (EPs) | `skellytracker.certify` and `skellytracker.certify_plan`, levels `quick` and `full`. Package options: `execution_providers`, `pipeline`. The tool `tools/certify_platform.py` writes a report file of this format (schema 1.1.0; see [3.6](#36-example-skellytracker)). | `skellytracker/REASON_CODES.md` | `skellytracker/core/eps/ep_evidence.yaml` (EPs); this repository for the other sections |
 | skellycam | cameras ([7.4](#74-camera-evidence)) | not yet implemented | not yet implemented | not yet implemented |
+
+The public repository of skellytracker is `https://github.com/domisjustanumber/skellytracker` for
+now. A commit on each pushed branch of it counts. The public repository of each other package is
+not set yet.

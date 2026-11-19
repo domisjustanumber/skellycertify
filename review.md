@@ -55,7 +55,7 @@ Do these steps for each module report in `modules`. One module can be valid and 
 
 1. Check each statement 1 to 6 of [Evidence validity](report-format.md#71-validity).
    Your result must agree with `evidence.valid` and `evidence.reasons`.
-2. Check statement 8: `package.commit` is a commit of the public repository of the package. A
+2. Check statement 8: `package.commit` is a commit of the [public repository of the package](report-format.md#9-packages). A
    commit that is not in the public repository makes the module a record only, with the reason
    `commit-not-public`.
 3. Check the rules of the package for its own evidence (statement 7). For skellytracker, an
@@ -158,6 +158,15 @@ Commit each report that passed [section 3](#3-check-privacy), also a report that
 
    > Thank you. Your report is not valid as evidence, for these reasons: `<reasons>`. We keep it as
    > a record in `<path>`. The project uses it to find problems.
+
+   For a module that is valid as evidence but gives no row ([6.1](#61-an-accepted-report)), use
+   this answer:
+
+   > Thank you. Your report is valid as evidence. We committed it as `<path>`. It gives no
+   > evidence row, for this reason: `<reason>`. We keep it as a record. The project uses it to find
+   > problems.
+
+   For `<reason>`, use the text of the "No row for" line of 6.1.
 
 2. Add the label `record-only`. Close the issue.
 

@@ -198,6 +198,10 @@ Success: npm prints `added ... packages`. The folder `node_modules/` exists. Git
 The relay has no runtime dependency. `wrangler` (the Cloudflare CLI) is the only development
 dependency. Its version is pinned in `package.json`.
 
+Run each `npx wrangler` command of this README from the folder `relay/`. From the repository root,
+a bare `npx wrangler` offers to download another Wrangler version. From the root, use the pinned
+one by its path: `node relay/node_modules/wrangler/bin/wrangler.js <command> --cwd relay`.
+
 ## 6. Log in to Cloudflare
 
 A plain `npx wrangler login` asks for each permission that Wrangler knows (KV, D1, Pages, email,
