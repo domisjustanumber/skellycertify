@@ -61,7 +61,9 @@ Do these steps for each module report in `modules`. One module can be valid and 
 3. Check the rules of the package for its own evidence (statement 7). For skellytracker, an
    execution provider with the catalog status `field-test` needs a `pass` in the check named
    `<label>`. That check passes only when its `probe` and `image` checks pass. A timing or a JPEG
-   check never changes it.
+   check never changes it. The report gives a `pass` or a `fail` also on a GPU whose hardware class
+   does not list the execution provider, for example `directml` on a GPU that is not from AMD. You
+   decide if such a result gives a reviewed row.
 4. Check what the `kind` gives ([Kinds of evidence](report-format.md#72-kinds-of-evidence)):
    - A valid `full` module can give a reviewed row.
    - A valid `quick` module alone never gives a reviewed row.
