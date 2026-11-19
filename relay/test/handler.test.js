@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { generateKeyPairSync, webcrypto } from 'node:crypto';
 import { handle, MAX_BYTES } from '../src/handler.js';
 import { createFakeGitHub } from '../scripts/fake-github.mjs';
-import { sample, validData, reportFile, makeEnv, post } from './helpers.js';
+import { sample, validData, reportFile, makeEnv, post, fakeLimiter } from './helpers.js';
 
 const VALID = sample('valid.md');
 let logs;
@@ -124,7 +124,7 @@ test('refused reports: 422 with a fixed code, and nothing is written', async () 
     [sample('refused-privacy.md'), 'privacy-rule', 1],
     [sample('refused-format.md'), 'wrong-schema', 'report.schema'],
     ['# no data\n', 'no-json-block'],
-    [VALID.replace(/\n/g, '\r\n'), 'bad-line-ends'],
+    [VALID.replace('# Certify report', '# Certify\rreport'), 'lone-cr'],
   ];
   for (const [text, code, detail] of cases) {
     const env = makeEnv();
@@ -171,34 +171,90 @@ test('400: empty body', async () => {
   assertError(await send(makeEnv(), createFakeGitHub(), post('')), 400, 'empty-body', false);
 });
 
-test('429: 5 reports per sender per hour, with Retry-After; another sender is not blocked', async () => {
-  const env = makeEnv();
+test('429 rate-limited: 2 POSTs per sender per 60 s, with Retry-After; another sender is not blocked', async () => {
+  const env = makeEnv({ SENDER_LIMIT: fakeLimiter(2) });
   const gh = createFakeGitHub();
-  const now = () => Date.parse('2026-11-19T10:15:00Z');
-  for (let i = 0; i < 5; i++) {
+  for (let i = 0; i < 2; i++) {
     const d = validData();
     d.note = `report ${i}`;
-    assert.equal((await send(env, gh, post(reportFile(d)), now)).res.status, 200);
+    assert.equal((await send(env, gh, post(reportFile(d)))).res.status, 200);
   }
-  const r = await send(env, gh, post(VALID), now);
+  const r = await send(env, gh, post(VALID));
   assertError(r, 429, 'rate-limited', true);
-  assert.equal(r.res.headers.get('retry-after'), '2700');
-  assert.equal((await send(env, gh, post(VALID, { ip: '198.51.100.7' }), now)).res.status, 200);
-  for (const key of env.RATE_KV.map.keys()) assert.ok(!key.includes('192.0.2.10'), 'the key holds no address');
+  assert.equal(r.res.headers.get('retry-after'), '60');
+  assert.equal((await send(env, gh, post(VALID, { ip: '198.51.100.7' }))).res.status, 200);
+  for (const key of env.SENDER_LIMIT.counts.keys()) {
+    assert.match(key, /^[0-9a-f]{32}$/, 'the key is a hash');
+    assert.ok(!key.includes('192.0.2.10') && !key.includes('198.51.100.7'), 'the key holds no address');
+  }
 });
 
-test('duplicates do not count against the sender limit', async () => {
-  const env = makeEnv();
+test('the limiter runs before the body is read: a refused or duplicate POST also counts', async () => {
+  const env = makeEnv({ SENDER_LIMIT: fakeLimiter(1) });
   const gh = createFakeGitHub();
-  for (let i = 0; i < 7; i++) assert.equal((await send(env, gh, post(VALID))).res.status, 200);
+  assertError(await send(env, gh, post(sample('refused-format.md'))), 422, 'wrong-schema', false);
+  assertError(await send(env, gh, post(VALID)), 429, 'rate-limited', true);
+  assert.equal(gh.state.calls.length, 0);
 });
 
-test('503 daily-cap when 200 reports were filed today', async () => {
-  const env = makeEnv();
-  env.RATE_KV.map.set('d:2026-11-19', '200');
-  const r = await send(env, createFakeGitHub(), post(VALID), () => Date.parse('2026-11-19T23:00:00Z'));
+test('429 busy: the burst limit with the key "all" covers all senders', async () => {
+  const env = makeEnv({ BURST_LIMIT: fakeLimiter(1) });
+  const gh = createFakeGitHub();
+  assert.equal((await send(env, gh, post(VALID))).res.status, 200);
+  const r = await send(env, gh, post(VALID, { ip: '198.51.100.7' }));
+  assertError(r, 429, 'busy', true);
+  assert.equal(r.res.headers.get('retry-after'), '60');
+  assert.deepEqual([...env.BURST_LIMIT.counts.keys()], ['all']);
+});
+
+const today = (number, label = 'certify-report', created_at = '2026-11-19T01:00:00Z') =>
+  ({ number, labels: [{ name: label }], created_at, body: '' });
+
+test('503 daily-cap: 200 certify-report issues created today (UTC); GitHub is the counter', async () => {
+  const now = () => Date.parse('2026-11-19T23:00:00Z');
+  const gh = createFakeGitHub({ now });
+  gh.state.issues.push(today(1, 'certify-report', '2026-11-18T12:00:00Z'));
+  for (let i = 2; i <= 201; i++) gh.state.issues.push(today(i));
+  const r = await send(makeEnv(), gh, post(VALID), now);
   assertError(r, 503, 'daily-cap', true);
   assert.equal(r.res.headers.get('retry-after'), '3600');
+  assert.equal(gh.state.calls.filter((c) => c.path.endsWith('/issues') && c.method === 'GET').length, 2, 'two pages of 100');
+  assert.equal(gh.state.calls.filter((c) => c.method !== 'GET').length, 0, 'nothing is written');
+});
+
+test('daily cap: 199 today passes; older issues and other labels do not count', async () => {
+  const now = () => Date.parse('2026-11-19T10:00:00Z');
+  const gh = createFakeGitHub({ now });
+  for (let i = 1; i <= 50; i++) gh.state.issues.push(today(i, 'certify-report', '2026-11-18T10:00:00Z'));
+  for (let i = 51; i <= 60; i++) gh.state.issues.push(today(i, 'question'));
+  for (let i = 61; i <= 259; i++) gh.state.issues.push(today(i));
+  assert.equal((await send(makeEnv(), gh, post(VALID), now)).res.status, 200);
+});
+
+test('a duplicate needs no daily-cap call, and is answered when the cap is reached', async () => {
+  const env = makeEnv();
+  const gh = createFakeGitHub();
+  await send(env, gh, post(VALID));
+  for (let i = 0; i < 200; i++) gh.state.issues.push(today(100 + i, 'certify-report', new Date().toISOString()));
+  gh.state.calls.length = 0;
+  const r = await send(env, gh, post(VALID));
+  assert.equal(r.res.status, 200);
+  assert.equal(r.body.duplicate, true);
+  assert.ok(!gh.state.calls.some((c) => c.path.endsWith('/issues') && c.method === 'GET'), 'no count call');
+});
+
+test('CRLF is accepted: the relay stores LF bytes, and LF and CRLF copies have one hash', async () => {
+  const env = makeEnv();
+  const gh = createFakeGitHub();
+  const crlf = await send(env, gh, post(VALID.replace(/\n/g, '\r\n')));
+  assert.equal(crlf.res.status, 200);
+  assert.equal(crlf.body.duplicate, false);
+  const hash = await sha256(VALID);
+  assert.equal(crlf.body.file_path, `inbox/2026/${hash}.md`, 'the hash of the LF bytes');
+  assert.equal(Buffer.from(gh.state.files.get(`inbox:inbox/2026/${hash}.md`).content, 'base64').toString(), VALID);
+  const lf = await send(env, gh, post(VALID));
+  assert.equal(lf.body.duplicate, true);
+  assert.equal(lf.body.issue_number, crlf.body.issue_number);
 });
 
 test('503 relay-off: the off switch answers at once', async () => {
@@ -208,8 +264,8 @@ test('503 relay-off: the off switch answers at once', async () => {
   assert.equal(gh.state.calls.length, 0);
 });
 
-test('503 relay-misconfigured: no credential, a part of the App secrets, no salt, no KV', async () => {
-  for (const extra of [{ GITHUB_TOKEN: undefined }, { GITHUB_APP_ID: '1' }, { RATE_SALT: undefined }, { RATE_KV: undefined }, { GITHUB_REPO: 'x' }]) {
+test('503 relay-misconfigured: no credential, a part of the App secrets, no salt, no limiter binding', async () => {
+  for (const extra of [{ GITHUB_TOKEN: undefined }, { GITHUB_APP_ID: '1' }, { RATE_SALT: undefined }, { SENDER_LIMIT: undefined }, { BURST_LIMIT: undefined }, { GITHUB_REPO: 'x' }]) {
     assertError(await send(makeEnv(extra), createFakeGitHub(), post(VALID)), 503, 'relay-misconfigured', true);
   }
 });

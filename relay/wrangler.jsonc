@@ -20,11 +20,21 @@
     "GITHUB_REPO": "domisjustanumber/skellycertify",
     "GITHUB_API_URL": "https://api.github.com"
   },
-  "kv_namespaces": [
+  // Rate Limiting bindings. Each count is per Cloudflare location and approximate.
+  // The period must be 10 or 60 seconds. Keep these numbers equal to src/ratelimit.js.
+  // namespace_id: a positive integer as a string, unique in the Cloudflare account.
+  "ratelimits": [
     {
-      "binding": "RATE_KV",
-      // Replace with the id that `npx wrangler kv namespace create RATE_KV` prints.
-      "id": "REPLACE_WITH_THE_KV_NAMESPACE_ID"
+      // Per sender: the key is a salted hash of the sender address.
+      "name": "SENDER_LIMIT",
+      "namespace_id": "71001",
+      "simple": { "limit": 2, "period": 60 }
+    },
+    {
+      // All senders: the key is "all".
+      "name": "BURST_LIMIT",
+      "namespace_id": "71002",
+      "simple": { "limit": 10, "period": 60 }
     }
   ]
 }

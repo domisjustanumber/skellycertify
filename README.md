@@ -17,7 +17,8 @@ report that the app sends. It runs no test.
   The run writes one report file. The run sends nothing. When the interface of the app and its
   backend are on different computers, the backend returns the file as it is.
 - **You** send the report file to this repository in one of two ways:
-  1. **The relay.** The app sends the file to the relay only when you tell it to send. You need no
+  1. **The relay.** The app shows you the exact file. It sends the file to the relay only when you
+     choose "send". A later retry sends the same file again, and nothing else. You need no
      GitHub account. The relay checks the file, commits it to the branch `inbox` and opens an
      issue. It stores nothing about you. See [relay/README.md](relay/README.md).
   2. **The issue form.** You attach the file to a GitHub issue

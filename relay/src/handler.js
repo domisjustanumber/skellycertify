@@ -1,13 +1,12 @@
-// The request handler: POST /reports, GET /health, CORS. No state of its own except the
-// rate-limit counters in KV.
+// The request handler: POST /reports, GET /health, CORS. It stores nothing of its own.
 
 import { parseReport, Refused, SCHEMA_MAJOR } from './report.js';
 import { privacyRule } from './privacy.js';
 import { buildTitle, buildBody, marker } from './issue.js';
 import { createGitHub, GitHubError, ConfigError } from './github.js';
-import { checkLimits, recordReport, senderKey } from './ratelimit.js';
+import { checkBurst, secondsToMidnight, senderKey, PER_DAY } from './ratelimit.js';
 
-export const MAX_BYTES = 1_048_576; // 1 MiB
+export const MAX_BYTES = 262_144; // 256 KiB
 export const BRANCH = 'inbox';
 const TYPES = ['text/markdown', 'text/plain'];
 
@@ -70,6 +69,14 @@ function typeOk(header) {
   return !charset || charset.replace(/"/g, '') === 'charset=utf-8';
 }
 
+class Limited extends Error {
+  constructor(code, retryAfter) {
+    super(code);
+    this.code = code;
+    this.retryAfter = retryAfter;
+  }
+}
+
 async function issueFromSidecar(gh, issuePath) {
   const text = await gh.readFile(issuePath, BRANCH);
   const number = Number.parseInt(text ?? '', 10);
@@ -87,15 +94,19 @@ async function file(report, bytes, hash, env, deps) {
     `Link certify report ${short} to issue #${issue.number}`).catch(() => null); // a retry finds the issue by its marker
   const answer = (issue, duplicate) => ({ issue_url: issue.html_url, issue_number: issue.number, file_path: filePath, duplicate });
 
-  await gh.ensureBranch(BRANCH);
-
-  // Duplicate: the sidecar file names the issue.
+  // Duplicate: the sidecar file names the issue. A read on a missing branch gives 404.
   const linked = await issueFromSidecar(gh, issuePath);
   if (linked) return answer(linked, true);
 
   let commit = null;
   let duplicate = await gh.exists(filePath, BRANCH);
   if (!duplicate) {
+    // The daily cap counts only new reports. Two requests at the same moment can both pass at 199.
+    const today = Math.floor(deps.now() / 86_400_000) * 86_400_000;
+    if ((await gh.countIssuesSince('certify-report', today, PER_DAY)) >= PER_DAY) {
+      throw new Limited('daily-cap', secondsToMidnight(deps.now()));
+    }
+    await gh.ensureBranch(BRANCH);
     commit = await gh.createFile(filePath, BRANCH, bytes, `Add certify report ${short}`);
     if (!commit) {
       // 422: another request committed the same file, or GitHub refused the write.
@@ -124,7 +135,7 @@ async function file(report, bytes, hash, env, deps) {
 async function postReport(request, env, deps) {
   if (env.RELAY_ENABLED !== 'true') return [fail(503, 'relay-off', 'the relay is switched off'), 'relay-off'];
   try {
-    if (!env.RATE_KV || !env.RATE_SALT) throw new ConfigError('RATE_KV or RATE_SALT missing');
+    if (!env.SENDER_LIMIT || !env.BURST_LIMIT || !env.RATE_SALT) throw new ConfigError('a limiter binding or RATE_SALT is missing');
     createGitHub(env, deps); // checks GITHUB_REPO and the credential secrets
   } catch {
     return [fail(503, 'relay-misconfigured', 'the relay has no valid configuration'), 'relay-misconfigured'];
@@ -136,26 +147,33 @@ async function postReport(request, env, deps) {
   if (length > MAX_BYTES) return [fail(413, 'too-large', `the limit is ${MAX_BYTES} bytes`), 'too-large'];
 
   const sender = await senderKey(request.headers.get('cf-connecting-ip') || 'unknown', env.RATE_SALT);
-  const limited = await checkLimits(env.RATE_KV, sender, deps.now());
+  const limited = await checkBurst(env, sender);
   if (limited) {
-    const detail = limited.code === 'daily-cap' ? 'the relay daily limit is reached' : 'too many reports from this address';
+    const detail = limited.code === 'busy' ? 'the relay is busy' : 'too many reports from this address';
     return [fail(limited.status, limited.code, detail, limited.retryAfter), limited.code];
   }
 
-  const bytes = await readCapped(request);
-  if (bytes === null) return [fail(413, 'too-large', `the limit is ${MAX_BYTES} bytes`), 'too-large'];
-  if (bytes.length === 0) return [fail(400, 'empty-body', 'the body must be the report file'), 'empty-body'];
-  const hash = hex(await crypto.subtle.digest('SHA-256', bytes));
-  const meta = [bytes.length, hash];
+  const raw = await readCapped(request);
+  if (raw === null) return [fail(413, 'too-large', `the limit is ${MAX_BYTES} bytes`), 'too-large'];
+  if (raw.length === 0) return [fail(400, 'empty-body', 'the body must be the report file'), 'empty-body'];
 
   let report;
+  let bytes;
+  let hash;
+  let meta = [raw.length, null];
   try {
     let text;
     try {
-      text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+      // ignoreBOM keeps a BOM, so that only the line ends change.
+      text = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(raw);
     } catch {
       throw new Refused('not-utf8', 'the file must be UTF-8');
     }
+    // Each CRLF becomes LF before each check, the hash and the commit (report-format.md 4.2).
+    text = text.replace(/\r\n/g, '\n');
+    bytes = new TextEncoder().encode(text);
+    hash = hex(await crypto.subtle.digest('SHA-256', bytes));
+    meta = [bytes.length, hash];
     report = parseReport(text);
     const rule = privacyRule(report.markdown, report.data);
     if (rule) throw new Refused('privacy-rule', rule);
@@ -166,9 +184,9 @@ async function postReport(request, env, deps) {
 
   try {
     const result = await file(report, bytes, hash, env, deps);
-    if (!result.duplicate) await recordReport(env.RATE_KV, sender, deps.now());
     return [json(200, result), result.duplicate ? 'duplicate' : 'created', ...meta];
   } catch (e) {
+    if (e instanceof Limited) return [fail(503, e.code, 'the relay daily limit is reached', e.retryAfter), e.code, ...meta];
     if (e instanceof GitHubError) {
       const detail = {
         'credential-rejected': 'GitHub refused the relay credential',

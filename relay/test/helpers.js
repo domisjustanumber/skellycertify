@@ -13,14 +13,15 @@ export function reportFile(data, markdown = '# Certify report\n\nA test file.\n'
   return `${markdown}\n## Data\n\n\`\`\`json\n${JSON.stringify(data, null, 1)}\n\`\`\`\n`;
 }
 
-export function fakeKV() {
-  const map = new Map();
+// A fake Rate Limiting binding: limit({ key }) resolves to { success }. One window only.
+export function fakeLimiter(max = 1000) {
+  const counts = new Map();
   return {
-    map,
-    async get(key) { return map.has(key) ? map.get(key) : null; },
-    async put(key, value, opts) {
-      if (!opts || opts.expirationTtl < 60) throw new Error('expirationTtl must be at least 60');
-      map.set(key, value);
+    counts,
+    async limit({ key }) {
+      if (typeof key !== 'string') throw new TypeError('key must be a string');
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+      return { success: counts.get(key) <= max };
     },
   };
 }
@@ -33,7 +34,8 @@ export function makeEnv(extra = {}) {
     GITHUB_API_URL: 'https://fake.github.test',
     GITHUB_TOKEN: 'test-token',
     RATE_SALT: 'test-salt',
-    RATE_KV: fakeKV(),
+    SENDER_LIMIT: fakeLimiter(),
+    BURST_LIMIT: fakeLimiter(),
     ...extra,
   };
 }

@@ -37,7 +37,9 @@ test('rule 2: private object keys at any depth', () => {
     'uuid', 'mac', 'mac_address', 'bus_id', 'pci_bus_id', 'luid', 'ip', 'ip_address']) {
     assert.equal(inDetails({ deep: [{ [k]: 'x' }] }), 2, k);
   }
-  assert.equal(inDetails({ hostname_count: 1, User: 'x' }), 0, 'only the exact keys of the rule');
+  assert.equal(inDetails({ Hostname: 'x' }), 2, 'case-insensitive');
+  assert.equal(inDetails({ MAC_Address: 'x' }), 2, 'case-insensitive');
+  assert.equal(inDetails({ hostname_count: 1, users: 'x' }), 0, 'only the names of the rule');
 });
 
 test('rule 3: PCI bus addresses', () => {
@@ -75,7 +77,8 @@ test('rule 7: media file extensions at the end of a string', () => {
     assert.equal(stringRule(`recording${e}`), 7, e);
   }
   assert.equal(stringRule('a.png file'), 0, 'only at the end');
-  assert.equal(stringRule('X.PNG'), 0, 'the rule lists lower case only');
+  assert.equal(stringRule('X.JPG'), 7, 'case-insensitive');
+  assert.equal(stringRule('clip.Mp4'), 7, 'case-insensitive');
 });
 
 test('rule 8: image links in the Markdown', () => {

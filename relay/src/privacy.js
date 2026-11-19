@@ -4,7 +4,7 @@
 // Markdown part (the text before the fenced json block).
 
 const PATH_RE = /(?:\b[A-Za-z]:[\\/]|\\\\[^\\\s]|\/(?:home|Users|root)\/|~[\\/])/; // rule 1
-const PRIVATE_KEYS = new Set([ // rule 2
+const PRIVATE_KEYS = new Set([ // rule 2, compared in lower case
   'hostname', 'host_name', 'node', 'user', 'username', 'user_name', 'email', 'serial',
   'serial_number', 'uuid', 'mac', 'mac_address', 'bus_id', 'pci_bus_id', 'luid', 'ip', 'ip_address',
 ]);
@@ -14,7 +14,7 @@ const MAC_RE = /\b(?:[0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}\b/; // rule 4
 const EMAIL_RE = /[A-Za-z0-9._%+-]+@[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)*\.[A-Za-z]{2,}/;
 const MAX_CHARS = 2000; // rules 6 and 11
 const MEDIA_EXT = ['.jpg', '.jpeg', '.png', '.bmp', '.tif', '.tiff', '.webp', '.mp4', '.avi', '.mkv',
-  '.mov', '.webm', '.wav', '.mp3', '.flac']; // rule 7, as written (lower case)
+  '.mov', '.webm', '.wav', '.mp3', '.flac']; // rule 7, compared in lower case
 const REASON_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/; // rule 9 (section 5.2)
 const TRACEBACK = 'Traceback (most recent call last)'; // rule 10
 
@@ -29,7 +29,8 @@ export function stringRule(s) {
   if (MAC_RE.test(s)) return 4;
   if (EMAIL_RE.test(s)) return 5;
   if (tooLong(s)) return 6;
-  if (MEDIA_EXT.some((e) => s.endsWith(e))) return 7;
+  const lower = s.toLowerCase();
+  if (MEDIA_EXT.some((e) => lower.endsWith(e))) return 7;
   if (s.includes(TRACEBACK)) return 10;
   return 0;
 }
@@ -44,7 +45,7 @@ export function privacyRule(markdownLines, data) {
     else if (Array.isArray(v)) v.forEach(walk);
     else if (v !== null && typeof v === 'object') {
       for (const [k, child] of Object.entries(v)) {
-        take(PRIVATE_KEYS.has(k) ? 2 : stringRule(k));
+        take(PRIVATE_KEYS.has(k.toLowerCase()) ? 2 : stringRule(k));
         if (k === 'reason' && child !== null && !isReason(child)) take(9);
         walk(child);
       }

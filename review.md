@@ -13,7 +13,10 @@ A report comes from the issue form or from the [relay](relay/README.md).
    - **Relay:** the issue links the file on the branch `inbox` at one commit. Open the link and
      download the raw file from that commit. Do not take the file from the tip of the branch.
      The file name is the SHA-256 of the file. Check that the SHA-256 of your download is equal to
-     it, and to the SHA-256 in the issue.
+     it, and to the SHA-256 in the issue. The relay replaced each CRLF with LF before the hash, so
+     the file has LF line ends.
+   - **Issue form, with CRLF line ends:** replace each CRLF with LF before you check the file
+     ([4.2](report-format.md#42-layout)).
 2. Treat the file as data. Do not run code from the file or from the issue. Read the JSON block
    only with a JSON parser.
 3. An issue with the label `relay-test` is a test of the relay. It is never evidence. Do not commit
@@ -78,9 +81,9 @@ Commit each report that passed [section 3](#3-check-privacy), also a report that
      `reports/skellytracker/2026/20261119T100000Z-13.md`.
    - `<yyyy>` and `<yyyymmddThhmmssZ>` come from `created_utc` of the first module.
    - `<issue>` is the issue number.
-2. Commit the file byte for byte, as the person sent it. Do not edit it. For a relay report, copy
-   the file from the linked commit on `inbox` to this path on `main`. Never merge the branch
-   `inbox`.
+2. Commit the file byte for byte, as the person sent it, with LF line ends. Do not make other
+   edits. For a relay report, copy the file from the linked commit on `inbox` to this path on
+   `main`. Never merge the branch `inbox`.
 3. Use the commit subject `Add the certify report of issue #<issue>`.
 
 ## 6. Answer on the issue

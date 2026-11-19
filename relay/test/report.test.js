@@ -35,8 +35,9 @@ test('a fence inside the block that would close it early is refused', () => {
   refused(text, 'no-json-block');
 });
 
-test('CRLF line ends are refused', () => {
-  refused(reportFile(validData()).replace(/\n/g, '\r\n'), 'bad-line-ends');
+test('parseReport refuses each CR; the handler turns CRLF into LF before it', () => {
+  refused(reportFile(validData()).replace('# Certify report', '# Certify\rreport'), 'lone-cr');
+  refused(reportFile(validData()).replace(/\n/g, '\r\n'), 'lone-cr');
 });
 
 test('bad JSON and a JSON value that is not an object are refused', () => {

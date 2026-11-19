@@ -19,7 +19,8 @@ const RESULTS = ['pass', 'fail', 'not-run', 'record-only'];
 // Split the file into the Markdown part and the JSON text of the last fenced `json` block.
 // The file must end with that block and one "\n" (section 4.2).
 export function splitReport(text) {
-  if (text.includes('\r')) throw new Refused('bad-line-ends', 'the file must use \\n line ends');
+  // The handler turns each CRLF into LF first. A CR that is left is a lone CR.
+  if (text.includes('\r')) throw new Refused('lone-cr', 'a CR that is not part of CRLF is not allowed');
   if (!text.endsWith('\n')) throw new Refused('no-json-block', 'the file must end with a fenced json block and one \\n');
   const lines = text.slice(0, -1).split('\n');
   const close = /^(`{3,})[ \t]*$/.exec(lines[lines.length - 1]);

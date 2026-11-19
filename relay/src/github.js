@@ -186,6 +186,20 @@ export function createGitHub(env, { fetch = globalThis.fetch, now = Date.now } =
       const got = await call('GET', `${r}/issues?state=all&sort=created&direction=desc&per_page=100`);
       return got.json.find((i) => !i.pull_request && typeof i.body === 'string' && i.body.includes(markerText)) ?? null;
     },
+    // Count the issues with the label that were created since `sinceMs`, up to `max`.
+    // Newest first, 100 for each page: at most ceil(max / 100) calls. Pull requests do not count.
+    async countIssuesSince(label, sinceMs, max) {
+      let n = 0;
+      for (let page = 1; n < max && page <= Math.ceil(max / 100); page++) {
+        const got = await call('GET', `${r}/issues?labels=${encodeURIComponent(label)}&state=all&sort=created&direction=desc&per_page=100&page=${page}`);
+        for (const i of got.json) {
+          if (Date.parse(i.created_at) < sinceMs) return n;
+          if (!i.pull_request) n++;
+        }
+        if (got.json.length < 100) break;
+      }
+      return n;
+    },
     async createIssue(title, body, labels) {
       return (await call('POST', `${r}/issues`, { title, body, labels }, [201])).json;
     },

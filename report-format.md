@@ -159,7 +159,10 @@ a PyInstaller build.
 - The package must delete each file that it downloads and each package that it installs. This
   rule also applies after a cancel, a crash or a time-out.
 - The package must not remove a thing that was on the computer before the run.
-- The package must not change the stores, the caches or the settings of the user. It keeps its
+- The package may record its own results in its own store: its reports, its probe results, the
+  answers of the person and a local pass. A local pass makes an item usable on that computer
+  ([7.2](#72-kinds-of-evidence)).
+- The package must not change any other store, cache or setting of the user. It keeps its other
   files in its own work folder.
 - A cleanup step that fails gets a `fail` row in `cleanup` ([section 3](#3-the-module-report)).
   The package must still return the report.
@@ -349,8 +352,27 @@ A package that runs alone, from its own clone, writes the same file with one mod
 `"app": null`.
 
 The report is one file. When the interface of the app and its backend are on different
-computers, the backend returns the file as it is. The interface saves the file and opens the issue
-form. Nothing is sent automatically.
+computers, the backend returns the file as it is. The interface saves the file.
+
+There are two ways to hand in the file:
+
+1. **The relay** ([relay/README.md](relay/README.md)). The app sends the file to the relay after
+   the "send" of the person. The relay files the file in this repository and returns the address of
+   the issue.
+2. **The issue form.** The person attaches the file to a new issue. This is the permanent
+   fallback. The app offers it after 3 failed retries, and at once when the relay answers 413 or
+   422.
+
+Nothing is sent automatically. This means: a run sends nothing, and the app sends a file only after
+the person read that file and chose "send". A later automatic retry sends the same file again.
+
+**Send rules for the app.** The relay publishes a report before a person of the project reads it.
+So:
+
+- Before the app sends a report to the relay, the app must show the person the exact file. The
+  app must get a clear "send" from the person.
+- The app must keep the file that the person accepted. An automatic retry must send only that
+  file, byte for byte. It must never send data that the app added later.
 
 ### 4.2 Layout
 
@@ -374,6 +396,9 @@ Rules for a reader:
 - The JSON block is the data. The Markdown before it is for a person.
 - If the Markdown and the JSON block do not agree, the JSON block is correct.
 - A reader takes the last fenced `json` block. The file must end with that block and one `\n`.
+- A writer writes `\n` line ends. A reader (the relay, a tool of the reviewer) accepts `\r\n`. It
+  replaces each `\r\n` with `\n` before each check and before it computes a hash. The relay commits
+  the file with `\n` line ends. A `\r` that is not part of `\r\n` makes the file not valid.
 
 ### 4.3 Example
 
@@ -467,14 +492,16 @@ again ([review.md](review.md)).
 
 1. No string matches the path pattern
    `(?:\b[A-Za-z]:[\\/]|\\\\[^\\\s]|/(?:home|Users|root)/|~[\\/])`.
-2. No object key is one of: `hostname`, `host_name`, `node`, `user`, `username`, `user_name`,
+2. No object key is one of these names, in upper case, lower case or a mix (for example
+   `Hostname`): `hostname`, `host_name`, `node`, `user`, `username`, `user_name`,
    `email`, `serial`, `serial_number`, `uuid`, `mac`, `mac_address`, `bus_id`, `pci_bus_id`, `luid`,
    `ip`, `ip_address`.
 3. No string matches a PCI bus address, `\b(?:[0-9a-fA-F]{4}:)?[0-9a-fA-F]{2}:[0-9a-fA-F]{2}\.[0-7]\b`.
 4. No string matches a MAC address, `\b(?:[0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}\b`.
 5. No string holds an email address.
 6. No string is longer than 2000 characters. A camera frame cannot fit in such a string.
-7. No string ends with the extension of an image, video or audio file: `.jpg`, `.jpeg`, `.png`,
+7. No string ends with the extension of an image, video or audio file, in upper case, lower case
+   or a mix (for example `.JPG`): `.jpg`, `.jpeg`, `.png`,
    `.bmp`, `.tif`, `.tiff`, `.webp`, `.mp4`, `.avi`, `.mkv`, `.mov`, `.webm`, `.wav`, `.mp3`,
    `.flac`. The file names of recordings are not in a report.
 8. The Markdown holds no image link (`![`). The report file has no other attached file.
@@ -580,7 +607,7 @@ These are the only packages of this format.
 
 | Package | Evidence for | `certify()` | Reason codes | Evidence rows |
 |---|---|---|---|---|
-| skellytracker | execution providers (EPs) | not yet; the level `full` is `tools/certify_platform.py` today | not yet written | `skellytracker/core/eps/ep_evidence.yaml` (EPs); this repository for the other sections |
+| skellytracker | execution providers (EPs) | `skellytracker.certify` and `skellytracker.certify_plan`, level `quick`. Package options: `execution_providers`, `pipeline`. The level `full` is the stand-alone tool `tools/certify_platform.py` for now. | `skellytracker/REASON_CODES.md` (level `quick` only so far) | `skellytracker/core/eps/ep_evidence.yaml` (EPs); this repository for the other sections |
 | skellycam | cameras ([7.4](#74-camera-evidence)) | not yet implemented | not yet implemented | not yet implemented |
 
 ## 10. Differences from skellytracker.certify-suite/1

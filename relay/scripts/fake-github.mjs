@@ -12,7 +12,8 @@ const sha = () => [...crypto.getRandomValues(new Uint8Array(20))].map((b) => b.t
 // options.token: the bearer token that the repository calls must carry (null: any token).
 // options.appPublicKey: a CryptoKey; when set, the fake checks the App JWT and gives tokens.
 // options.fault(method, path): return an HTTP status to fail that call, or nothing.
-export function createFakeGitHub({ owner = 'domisjustanumber', repo = 'skellycertify', token = null, appPublicKey = null, fault = () => null } = {}) {
+// options.now: the clock of the fake, for created_at.
+export function createFakeGitHub({ owner = 'domisjustanumber', repo = 'skellycertify', token = null, appPublicKey = null, fault = () => null, now = Date.now } = {}) {
   const state = {
     refs: { main: sha() },
     files: new Map(), // "branch:path" -> { content (base64), commit }
@@ -98,11 +99,18 @@ export function createFakeGitHub({ owner = 'domisjustanumber', repo = 'skellycer
       const issue = state.issues.find((i) => i.number === Number(r[1]));
       return issue ? reply(200, issue) : reply(404, { message: 'Not Found' });
     }
-    if (rest === '/issues' && method === 'GET') return reply(200, [...state.issues].reverse().slice(0, 100));
+    if (rest === '/issues' && method === 'GET') {
+      const label = u.searchParams.get('labels');
+      const perPage = Number(u.searchParams.get('per_page')) || 30;
+      const page = Number(u.searchParams.get('page')) || 1;
+      const list = [...state.issues].reverse().filter((i) => !label || i.labels.some((l) => l.name === label));
+      return reply(200, list.slice((page - 1) * perPage, page * perPage));
+    }
     if (rest === '/issues' && method === 'POST') {
       if (typeof body.body === 'string' && body.body.length > 65536) return reply(422, { message: 'body is too long' });
       const number = state.issues.length + 1;
       const issue = { number, title: body.title, body: body.body, labels: body.labels.map((name) => ({ name })),
+        created_at: new Date(now()).toISOString(),
         html_url: `https://github.com/${owner}/${repo}/issues/${number}` };
       state.issues.push(issue);
       return reply(201, issue);
