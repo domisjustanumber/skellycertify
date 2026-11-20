@@ -64,7 +64,7 @@ test('the quick sample: two modules of one package with their ids make one issue
   assert.match(body, /· id `3f2b8c1e-9a4d-4e7b-b6a1-0c5d2e8f7a90` · quick run · valid as evidence$/m);
   assert.match(body, /· id `c1d2e3f4-5a6b-4c7d-8e9f-a0b1c2d3e4f5` · quick run · not valid as evidence: `check-failed`$/m);
   assert.match(body, /^\| `NVIDIA RTX 3070 8 GB` \| `TensorRT RTX` \| fail \|\n\| `NVIDIA RTX 3070 8 GB` \| `TensorRT RTX` GPU decode \| pass \|$/m);
-  assert.match(body, /^\| `skellytracker` `c1d2e3f4-5a6b-4c7d-8e9f-a0b1c2d3e4f5` \| `TensorRT RTX` \| `trt-rtx@10de-2484-0:image` \| `output-mismatch` \|$/m);
+  assert.match(body, /^\| `skellytracker` `c1d2e3f4-5a6b-4c7d-8e9f-a0b1c2d3e4f5` \| `TensorRT RTX` \| `trt-rtx@10de-2484-0:image` \| fail \| `output-mismatch` \|$/m);
 });
 
 test('the log line holds only time, outcome, status, size and the hash prefix', async () => {

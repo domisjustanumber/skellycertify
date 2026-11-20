@@ -31,7 +31,7 @@ Note of the person:
 
 ```json
 {
- "schema": "skellycertify.report/1.3.0",
+ "schema": "skellycertify.report/1.4.0",
  "app": {
   "name": "freemocap",
   "version": "2.0.0",
@@ -39,7 +39,7 @@ Note of the person:
  },
  "modules": [
   {
-   "schema": "skellycertify.report/1.3.0",
+   "schema": "skellycertify.report/1.4.0",
    "package": {
     "name": "skellytracker",
     "version": "2.0.0",

@@ -54,15 +54,21 @@ of 4.2.
   `fail`, `record`, `partial`, `skipped (busy)` or `skipped (already reviewed)`.
 - Only when a module has a `benchmark` item: the table `| GPU | Module | Stage | ms/frame | FPS |`.
 - The camera table, or the line `Cameras: not checked on this system.`
-- Only when a section or a check failed: `Failed checks:` and the table
-  `| Package | Module | Test | Reason |`. It has one row for each section with the result `fail`,
-  or for each check with the result `fail` when the module has no sections. The `Package` cell also
-  shows the `id` of the module. The `Module` cell is the `module` of the section or the check.
+- Only when it has a row: `Checks that did not pass:` and the table
+  `| Package | Module | Test | Result | Reason |` of 4.2 part 7. It has one row for each check with
+  the result `fail`. It has one row for each check with the result `not-run` whose `module` is the
+  `name` of a `partial` or `fail` summary item of the same module. A section with the result `fail`
+  and no check of its own has one row. The `Package` cell also shows the `id` of the module. The
+  `Module` cell is the `module` of the check or the section. The `Result` cell is `fail` or
+  `not run`.
 - The note as a quote, at most 2000 characters.
 - The link to the file, the SHA-256 and a hidden marker `<!-- skellycertify-report sha256:<hash> -->`.
 
+The body does not show `notices` ([report-format.md 3.8](../report-format.md#38-notices)). They are
+for the person at the app. The relay checks their form only.
+
 If the body is longer than 65,536 characters, the relay removes rows from the end of the tables
-and says so. It removes the failed rows first, then the benchmark rows, the camera rows, the GPU
+and says so. It removes the rows of the checks that did not pass first, then the benchmark rows, the camera rows, the GPU
 rows and the module lines. The report file holds all rows.
 
 Each report string is untrusted. The relay removes each character that can start a mention, an
@@ -423,7 +429,7 @@ Success: `HTTP 200`, `"duplicate":false` and a line `Issue: https://github.com/d
    - the first line says `Test of the relay`;
    - the title is `[certify] FMC 2.0.0 · Win 11 26H2 · NVIDIA RTX 3070, Intel UHD 770`;
    - the module line, the system list, the GPU table and the benchmark table agree with the
-     Markdown part of `samples/valid.md`. That sample has no `fail` row, so the body has no `Failed checks:` table;
+     Markdown part of `samples/valid.md`. That sample has no row of a check that did not pass, so the body has no `Checks that did not pass:` table;
    - the author is your account (Part 2 changes this to the app).
 2. Click the link of the report file. GitHub shows `inbox/test/<sha256>.md` at one commit.
 3. Open `https://github.com/domisjustanumber/skellycertify/tree/inbox/inbox/test`. It holds the

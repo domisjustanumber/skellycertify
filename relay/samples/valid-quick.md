@@ -19,12 +19,12 @@ freemocap 2.0.0 · 2026-11-19 10:00 UTC
 
 Cameras: not checked on this system.
 
-Failed checks:
+Checks that did not pass:
 
-| Package | Module | Test | Reason |
-|---|---|---|---|
-| skellytracker | TensorRT RTX | trt-rtx@10de-2484-0 | image-failed |
-| skellytracker | TensorRT RTX | trt-rtx@10de-2484-0:image | output-mismatch |
+| Package | Module | Test | Result | Reason |
+|---|---|---|---|---|
+| skellytracker | TensorRT RTX | trt-rtx@10de-2484-0 | fail | image-failed |
+| skellytracker | TensorRT RTX | trt-rtx@10de-2484-0:image | fail | output-mismatch |
 
 Note of the person:
 
@@ -34,7 +34,7 @@ Note of the person:
 
 ```json
 {
- "schema": "skellycertify.report/1.3.0",
+ "schema": "skellycertify.report/1.4.0",
  "app": {
   "name": "freemocap",
   "version": "2.0.0",
@@ -42,7 +42,7 @@ Note of the person:
  },
  "modules": [
   {
-   "schema": "skellycertify.report/1.3.0",
+   "schema": "skellycertify.report/1.4.0",
    "id": "3f2b8c1e-9a4d-4e7b-b6a1-0c5d2e8f7a90",
    "package": {
     "name": "skellytracker",
@@ -154,7 +154,7 @@ Note of the person:
    }
   },
   {
-   "schema": "skellycertify.report/1.3.0",
+   "schema": "skellycertify.report/1.4.0",
    "id": "c1d2e3f4-5a6b-4c7d-8e9f-a0b1c2d3e4f5",
    "package": {
     "name": "skellytracker",

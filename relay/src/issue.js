@@ -147,16 +147,21 @@ const cameraRows = (data) => data.modules.flatMap((m) => itemsOf(m)
   .filter((it) => it.group === 'camera')
   .map((it) => `| ${code(it.name, 80)} | ${shown(it)} |`));
 
-// One row for each failed section, or for each failed check when a module has no sections.
-function failedRows(data) {
+// The table of 4.2 part 7: each failed check, and each not-run check whose module is the name of a
+// partial or failed summary item of the same module report. Other not-run checks have no row: a
+// system has many checks that cannot run on it. A failed section with no check of its own gets one row.
+function notPassedRows(data) {
   const rows = [];
   for (const m of data.modules) {
     const name = `${code(m.package.name, 60)}${m.id ? ` ${code(m.id, 36)}` : ''}`;
-    const hasSections = Array.isArray(m.sections);
-    for (const r of (hasSections ? m.sections : m.checks).filter((x) => x.result === 'fail')) {
+    const row = (r) => {
       const mod = code(r.module, 80);
-      rows.push(`| ${name} |${mod ? ` ${mod} ` : ' '}| ${testName(r.name)} | ${code(r.reason, 80)} |`);
-    }
+      rows.push(`| ${name} |${mod ? ` ${mod} ` : ' '}| ${testName(r.name)} | ${r.result === 'fail' ? 'fail' : 'not run'} | ${code(r.reason, 80)} |`);
+    };
+    const open = new Set(itemsOf(m).filter((it) => it.result === 'partial' || it.result === 'fail').map((it) => it.name));
+    m.checks.filter((c) => c.result === 'fail' || (c.result === 'not-run' && open.has(c.module))).forEach(row);
+    const withChecks = new Set(m.checks.map((c) => c.section));
+    if (Array.isArray(m.sections)) m.sections.filter((s) => s.result === 'fail' && !withChecks.has(s.id)).forEach(row);
   }
   return rows;
 }
@@ -184,7 +189,7 @@ export function buildBody({ data, hash, filePath, fileUrl, testMode }) {
   const start = when(data.modules.map((m) => m.created_utc).sort()[0]);
   const lists = [
     single ? [moduleLine(data.modules[0], true)] : data.modules.map((m) => `- ${moduleLine(m, false)}`),
-    gpuRows(data), benchmarkRows(data), cameraRows(data), failedRows(data),
+    gpuRows(data), benchmarkRows(data), cameraRows(data), notPassedRows(data),
   ];
   const system = systemLines(data);
   const note = typeof data.note === 'string' && neutral(data.note, 10) ? ['Note of the person:', '', quote(data.note)] : [];
@@ -202,16 +207,16 @@ export function buildBody({ data, hash, filePath, fileUrl, testMode }) {
       ...(more > 0 ? [`- and ${more} more modules (see the report file).`] : []),
     ];
     const cameras = lists[3].length ? table(3, '| Camera | Result |') : ['Cameras: not checked on this system.'];
-    const failed = lists[4].length ? ['Failed checks:', '', ...table(4, '| Package | Module | Test | Reason |')] : [];
+    const notPassed = lists[4].length ? ['Checks that did not pass:', '', ...table(4, '| Package | Module | Test | Result | Reason |')] : [];
     return [
       testMode ? ['**Test of the relay.** This issue is never evidence.'] : [],
       header, system, table(1, '| GPU | Module | Result |'), table(2, '| GPU | Module | Stage | ms/frame | FPS |'),
-      cameras, failed, note, tail,
+      cameras, notPassed, note, tail,
     ].filter((p) => p.length).map((p) => p.join('\n')).join('\n\n');
   };
   const kept = lists.map((l, i) => (i === 0 ? Math.min(l.length, MODULE_LINES) : l.length));
   let body = make(kept);
-  // Drop rows from the end: first the failed rows, then the benchmarks, the cameras, the GPUs and
+  // Drop rows from the end: first the rows of the checks that did not pass, then the benchmarks, the cameras, the GPUs and
   // the module lines. Each row takes its length and one "\n". CUT_ROOM makes room for the "shortened" line.
   for (const i of [4, 2, 3, 1, 0]) {
     if (body.length <= BODY_LIMIT) break;

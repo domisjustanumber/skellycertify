@@ -124,32 +124,70 @@ test('the body of the valid sample is the summary of 4.2, with the link and the 
   assert.match(buildBody(args(validData(), true)), /^\*\*Test of the relay\.\*\* This issue is never evidence\.\n\n`freemocap`/);
 });
 
-test('one module with app null: one header line with the time; failed sections make the rows', () => {
+test('one module with app null: one header line with the time; a failed section with no check gets a row', () => {
   const d = validData();
   d.app = null;
   d.note = null;
   d.modules[0].id = ID_A;
-  d.modules[0].sections[0].result = 'fail';
+  d.modules[0].sections[0].result = 'fail'; // section 1 has checks: the table names the checks, not the section
   d.modules[0].sections[0].reason = 'check-failed';
+  d.modules[0].sections.push({ id: '4', name: 'Cameras', result: 'fail', reason: 'crashed' });
   d.modules[0].evidence = { valid: false, reasons: Array.from({ length: 12 }, (_, i) => `r${i}`) };
   const body = buildBody(args(d));
   const reasons = Array.from({ length: 10 }, (_, i) => `\`r${i}\``).join(', ');
   assert.ok(body.startsWith(`\`skellytracker\` \`2.0.0\` · id \`${ID_A}\` · full run · 2026-11-19 10:00 UTC · not valid as evidence: ${reasons} and 2 more\n\n- OS:`));
-  assert.ok(body.includes(`Failed checks:\n\n| Package | Module | Test | Reason |\n|---|---|---|---|\n| \`skellytracker\` \`${ID_A}\` | | \`Checkout and versions\` | \`check-failed\` |\n\n`));
-  assert.doesNotMatch(body, /Note of the person/);
+  assert.ok(body.includes(`Checks that did not pass:\n\n| Package | Module | Test | Result | Reason |\n|---|---|---|---|---|\n| \`skellytracker\` \`${ID_A}\` | | \`Cameras\` | fail | \`crashed\` |\n\n`));
+  assert.doesNotMatch(body, /Checkout and versions|Note of the person/);
   d.modules[0].evidence = { valid: false, reasons: [] };
   assert.match(buildBody(args(d)), / · not valid as evidence\n/);
 });
 
-test('checks make the failed rows when a module has no sections', () => {
+test('each failed check has a row, with or without sections', () => {
   const d = validData();
-  delete d.modules[0].sections;
   d.modules[0].checks[0].result = 'fail';
   d.modules[0].checks[0].reason = 'timed-out';
   d.modules[0].checks[5].result = 'fail';
   d.modules[0].checks[5].reason = 'crashed';
-  const rows = buildBody(args(d)).split('\n').filter((l) => l.startsWith('| `skellytracker`'));
-  assert.deepEqual(rows, ['| `skellytracker` | | `checkout` | `timed-out` |', '| `skellytracker` | `CUDA` | `cuda` | `crashed` |']);
+  const want = ['| `skellytracker` | | `checkout` | fail | `timed-out` |', '| `skellytracker` | `CUDA` | `cuda` | fail | `crashed` |'];
+  const rows = (x) => buildBody(args(x)).split('\n').filter((l) => l.startsWith('| `skellytracker`'));
+  assert.deepEqual(rows(d), want);
+  delete d.modules[0].sections;
+  assert.deepEqual(rows(d), want);
+});
+
+test('a not-run check has a row only under a partial or failed summary item of the same module report', () => {
+  const m = { package: { name: 'skellycam', version: '1.0.0' }, kind: 'quick', created_utc: '2026-11-20T00:00:00Z', evidence: { valid: true, reasons: [] }, host: {},
+    summary: [
+      { group: 'camera', name: 'Logitech C922', device: '046d:085c', result: 'partial' },
+      { group: 'ep', name: 'CUDA', device: '10de:2484', result: 'fail' },
+      { group: 'ep', name: 'CUDA', device: '10de:2504', result: 'pass' }, // one name, two GPUs: the check name tells them apart
+      { group: 'ep', name: 'DirectML', device: '10de:2484', result: 'pass' },
+    ],
+    checks: [
+      { name: 'set-fps', module: 'Logitech C922', result: 'fail', reason: 'timed-out' },
+      { name: 'record-30s', module: 'Logitech C922', result: 'not-run', reason: 'over-budget' },
+      { name: 'cuda@10de-2484-0:image', module: 'CUDA', result: 'not-run', reason: 'probe-not-passed' },
+      { name: 'directml@10de-2484-0:jpeg', module: 'DirectML', result: 'not-run', reason: 'no-check' },
+      { name: 'amdgpu', result: 'not-run', reason: 'not-offered' },
+      { name: 'cleanup-check', result: 'pass', reason: null },
+    ],
+    notices: [{ code: 'camera-wedged', values: { camera: 'Logitech C922' } }] };
+  const other = { ...m, package: { name: 'skellytracker', version: '2.0.0' }, summary: [], checks: [{ name: 'x', module: 'Logitech C922', result: 'not-run', reason: 'r' }] };
+  const body = buildBody({ hash: HASH, filePath: 'inbox/x.md', fileUrl: 'https://example.invalid/x.md', testMode: false, data: { app: null, modules: [m, other], note: null } });
+  assert.ok(body.includes([
+    'Checks that did not pass:',
+    '',
+    '| Package | Module | Test | Result | Reason |',
+    '|---|---|---|---|---|',
+    '| `skellycam` | `Logitech C922` | `set-fps` | fail | `timed-out` |',
+    '| `skellycam` | `Logitech C922` | `record-30s` | not run | `over-budget` |',
+    '| `skellycam` | `CUDA` | `cuda@10de-2484-0:image` | not run | `probe-not-passed` |',
+    '',
+  ].join('\n')), body);
+  assert.doesNotMatch(body, /directml@|amdgpu|\| `skellytracker`/, 'no partial or failed item: no row');
+  assert.doesNotMatch(body, /camera-wedged/, 'the issue does not show notices');
+  m.checks = m.checks.filter((c) => c.result === 'not-run' && !c.module);
+  assert.doesNotMatch(buildBody({ hash: HASH, filePath: 'x', fileUrl: 'x', testMode: false, data: { app: null, modules: [m], note: null } }), /Checks that did not pass/, 'no row: no table');
 });
 
 test('summary results of 1.3.0 have their display words', () => {
@@ -233,18 +271,18 @@ test('hostile report strings are neutral in the body; only the relay marker is H
   const d = validData();
   d.app.name = HOSTILE.join(' ');
   d.modules[0].package.name = '@team <script>';
-  d.modules[0].sections[0].name = HOSTILE.join(' ');
-  d.modules[0].sections[0].result = 'fail';
-  d.modules[0].sections[0].reason = 'x';
+  d.modules[0].sections.push({ id: '9', name: HOSTILE.join(' '), result: 'fail', reason: 'x', module: HOSTILE.join(' ') });
   d.modules[0].host.os.label = HOSTILE.join(' ');
   d.modules[0].host.cpu.name = HOSTILE.join(' ');
   d.modules[0].host.gpus[1].name = HOSTILE.join(' ');
   d.modules[0].summary.push(...HOSTILE.map((name) => ({ group: 'camera', name, device: name, result: 'pass' })));
   d.modules[0].summary.push({ group: 'ep', name: HOSTILE[2], device: HOSTILE[5], result: 'pass' });
   d.modules[0].summary.push(...HOSTILE.map((name) => ({ group: 'benchmark', name, device: name, stage: name, ms_per_frame: 1, fps: 1 })));
-  d.modules[0].sections[0].module = HOSTILE.join(' ');
+  d.modules[0].summary.push({ group: 'camera', name: HOSTILE[2], device: null, result: 'partial' });
+  d.modules[0].checks.push({ section: '3', name: 'x', module: HOSTILE[2], result: 'not-run', reason: HOSTILE[4] });
   d.note = HOSTILE.join('\n');
   const body = buildBody(args(d));
+  assert.match(body, /\| not run \|/, 'the hostile not-run row is in the table');
   const withoutMarker = body.replace(marker(HASH), '').replace(/^> /gm, ''); // the relay's own quote prefix
   assert.doesNotMatch(withoutMarker, /@|<|>|https:\/\/evil|www\.evil|!\[/);
   assert.equal(body.split('<!-- skellycertify-report sha256:').length, 2, 'a report cannot forge a marker');
@@ -278,21 +316,23 @@ test('a hostile, very large report still gives a body within the limit', () => {
     id: ID_A,
     package: { name: long('p', 500), version: long('v', 500) },
     sections: undefined,
-    checks: k === 0 ? Array.from({ length: 5000 }, (_, i) => ({ name: `${i}${long('c', 127 - String(i).length)}`, module: long('m', 80), result: 'fail', reason: long('r', 80) })) : [],
+    checks: k === 0 ? Array.from({ length: 10000 }, (_, i) => ({ name: `${i}${long('c', 127 - String(i).length)}`, module: long('m', 80),
+      result: i % 2 ? 'not-run' : 'fail', reason: long('r', 80) })) : [],
     evidence: { valid: false, reasons: ['interrupted', ...Array.from({ length: 50 }, () => long('e', 80))] },
     host: { os: { label: long('o', 5000) }, cpu: { name: long('u', 5000) }, memory_bytes: 1e300,
       gpus: Array.from({ length: 200 }, (_, i) => ({ name: long('g', 2000), id: `${k}-${i}`, vram_bytes: 1e300 })) },
-    summary: Array.from({ length: 200 }, (_, i) => ({ group: ['ep', 'gpu-jpeg', 'camera', 'benchmark'][i % 4], name: long('n', 80), device: long('d', 40),
-      result: 'skipped', reason: 'reviewed', stage: long('s', 80), ms_per_frame: 1e300, fps: Number.MAX_VALUE })),
+    // Each item is partial and has the module of the checks, so each not-run check has a row.
+    summary: Array.from({ length: 200 }, (_, i) => ({ group: ['ep', 'gpu-jpeg', 'camera', 'benchmark'][i % 4], name: long('m', 80), device: long('d', 40),
+      result: 'partial', stage: long('s', 80), ms_per_frame: 1e300, fps: Number.MAX_VALUE })),
   });
-  const d = { schema: 'skellycertify.report/1.3.0', app: { name: long('a', 5000), version: long('b', 5000) },
+  const d = { schema: 'skellycertify.report/1.4.0', app: { name: long('a', 5000), version: long('b', 5000) },
     modules: Array.from({ length: 150 }, (_, k) => module(k)), note: long('x\n', 3000) };
   d.modules.forEach((m) => delete m.sections);
   const body = buildBody(args(d, true));
   assert.ok(body.length <= BODY_LIMIT, String(body.length));
   assert.ok(body.endsWith(marker(HASH)));
   assert.match(body, /^\*\*Test of the relay/);
-  assert.match(body, /The table is shortened: 0 of 5000 rows\./);
+  assert.match(body, /The table is shortened: 0 of 10000 rows\./);
   assert.match(body, /- and \d+ more modules/);
 });
 
@@ -307,7 +347,7 @@ test('many modules: at most 100 module lines', () => {
 test('the id of each module is in its module line and in the first cell of its rows', () => {
   const d = validData();
   d.modules = [{ ...d.modules[0], id: ID_A }, { ...validData().modules[0], id: ID_B, evidence: { valid: false, reasons: ['check-failed'] } }];
-  for (const m of d.modules) m.sections[0].result = 'fail';
+  for (const m of d.modules) Object.assign(m.checks[0], { result: 'fail', reason: 'x' });
   const body = buildBody(args(d));
   assert.match(body, new RegExp(`^- \`skellytracker\` \`2\\.0\\.0\` · id \`${ID_A}\` · full run · valid as evidence$`, 'm'));
   assert.match(body, new RegExp(`^- \`skellytracker\` \`2\\.0\\.0\` · id \`${ID_B}\` · full run · not valid as evidence: \`check-failed\`$`, 'm'));
@@ -327,5 +367,5 @@ test('the Test cell of a failed check keeps the @ of the check name, inside a co
   const m = { package: { name: 'p', version: '1.0.0' }, kind: 'full', created_utc: '2026-11-20T00:00:00Z', evidence: { valid: true, reasons: [] }, host: {},
     checks: [{ name: 'cuda@10de-2484-0:jpeg', result: 'fail', reason: 'timed-out' }] };
   const body = buildBody({ hash: 'a'.repeat(64), filePath: 'inbox/x.md', fileUrl: 'https://example.invalid/x.md', testMode: false, data: { app: null, modules: [m], note: null } });
-  assert.ok(body.includes('| `cuda@10de-2484-0:jpeg` | `timed-out` |'));
+  assert.ok(body.includes('| `cuda@10de-2484-0:jpeg` | fail | `timed-out` |'));
 });

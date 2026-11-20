@@ -18,7 +18,7 @@ test('the format sample is refused for its schema', () => {
 
 test('the reader takes the last json block, and a longer fence is allowed', () => {
   const text = '# Certify report\n\n```json\n{"x": 1}\n```\n\n````json\n' + JSON.stringify(validData()) + '\n````\n';
-  assert.equal(JSON.parse(splitReport(text).json).schema, 'skellycertify.report/1.3.0');
+  assert.equal(JSON.parse(splitReport(text).json).schema, 'skellycertify.report/1.4.0');
 });
 
 test('the file must end with the block and one newline', () => {
@@ -204,6 +204,41 @@ test('module: optional on a check and a section; when present a string of at mos
     const d = validData();
     change(d.modules[0]);
     refused(reportFile(d), 'bad-value', detail);
+  }
+});
+
+test('notices 1.4.0: optional; at most 50 items of a code and at most 8 short values (section 3.8)', () => {
+  const ok = [
+    (m) => { m.notices = []; },
+    (m) => { m.notices = [{ code: 'camera-wedged', values: { camera: 'Logitech C922' } }, { code: 'replug_all' }]; },
+    (m) => { m.notices = Array.from({ length: 50 }, () => ({ code: 'c'.repeat(80), values: Object.fromEntries(Array.from({ length: 8 }, (_, i) => [`k${i}`, i % 2 ? 'v'.repeat(80) : 0.5])) })); },
+    (m) => { m.notices = [{ code: 'x', extra: 1 }]; }, // a reader ignores a field that it does not know
+  ];
+  for (const change of ok) {
+    const d = validData();
+    change(d.modules[0]);
+    assert.ok(parseReport(reportFile(d)));
+  }
+  const W = 'report.modules[0].notices';
+  const bad = [
+    [(m) => { m.notices = {}; }, 'bad-value', W],
+    [(m) => { m.notices = Array.from({ length: 51 }, () => ({ code: 'x' })); }, 'bad-value', W],
+    [(m) => { m.notices = ['camera-wedged']; }, 'bad-value', `${W}[0]`],
+    [(m) => { m.notices = [{ values: {} }]; }, 'missing-field', `${W}[0].code`],
+    [(m) => { m.notices = [{ code: 'Camera is wedged' }]; }, 'bad-value', `${W}[0].code`],
+    [(m) => { m.notices = [{ code: 'c'.repeat(81) }]; }, 'bad-value', `${W}[0].code`],
+    [(m) => { m.notices = [{ code: 'x', values: [] }]; }, 'bad-value', `${W}[0].values`],
+    [(m) => { m.notices = [{ code: 'x', values: null }]; }, 'bad-value', `${W}[0].values`],
+    [(m) => { m.notices = [{ code: 'x', values: { a: 'v'.repeat(81) } }]; }, 'bad-value', `${W}[0].values`],
+    [(m) => { m.notices = [{ code: 'x', values: { a: { b: 1 } } }]; }, 'bad-value', `${W}[0].values`],
+    [(m) => { m.notices = [{ code: 'x', values: { a: true } }]; }, 'bad-value', `${W}[0].values`],
+    [(m) => { m.notices = [{ code: 'x', values: { a: null } }]; }, 'bad-value', `${W}[0].values`],
+    [(m) => { m.notices = [{ code: 'x', values: Object.fromEntries(Array.from({ length: 9 }, (_, i) => [`k${i}`, 1])) }]; }, 'bad-value', `${W}[0].values`],
+  ];
+  for (const [change, code, detail] of bad) {
+    const d = validData();
+    change(d.modules[0]);
+    refused(reportFile(d), code, detail);
   }
 });
 

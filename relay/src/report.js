@@ -20,6 +20,9 @@ const SUMMARY_GROUPS = ['ep', 'gpu-jpeg', 'camera', 'benchmark'];
 const SUMMARY_RESULTS = ['pass', 'fail', 'record-only', 'partial', 'skipped'];
 const SKIP_REASONS = ['busy', 'reviewed'];
 const SUMMARY_ITEMS = 200; // a limit of the relay, so that the issue body stays small
+const CODE_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/; // the pattern of a reason code (section 5.2)
+const NOTICES = 50; // section 3.8
+const NOTICE_VALUES = 8;
 
 // Split the file into the Markdown part and the JSON text of the last fenced `json` block.
 // The file must end with that block and one "\n" (section 4.2).
@@ -107,6 +110,17 @@ function checkModule(m, where) {
         need(s, 'reason', w, (v) => SKIP_REASONS.includes(v));
       } else if ('reason' in s) {
         need(s, 'reason', w, (v) => v === null);
+      }
+    });
+  }
+  if ('notices' in m) { // section 3.8: a code and a flat object of short values, no free text
+    need(m, 'notices', where, (v) => Array.isArray(v) && v.length <= NOTICES).forEach((n, i) => {
+      const w = `${where}.notices[${i}]`;
+      if (!isObj(n)) throw new Refused('bad-value', w);
+      need(n, 'code', w, (v) => str(v) && CODE_RE.test(v));
+      if ('values' in n) {
+        need(n, 'values', w, (v) => isObj(v) && Object.keys(v).length <= NOTICE_VALUES
+          && Object.values(v).every((x) => Number.isFinite(x) || short(x)));
       }
     });
   }

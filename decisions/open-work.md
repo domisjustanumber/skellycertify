@@ -9,6 +9,32 @@ task. Delete an item when its work is done. The PR that closes an item records t
 - **The relay: turn off the test mode.** The live relay runs in test mode since 2026-11-20 for the
   first hand-ins from freemocap. No report counts as evidence while it is on. Set `TEST_MODE` to
   `"false"` in `relay/wrangler.jsonc` and deploy, with the approval of the owner.
+- **The relay: deploy format 1.4.0 ([ADR-V1TR](entries/V1TR-format-1-4-0.md)).** The live relay
+  does not have the code of format 1.4.0 yet: the check of `notices` and the table
+  `Checks that did not pass:`. Deploy the relay with the approval of the owner.
+- **Each package: write format 1.4.0 ([ADR-V1TR](entries/V1TR-format-1-4-0.md)).** skellytracker,
+  skellycam and freemocap must give one check for each test and write `module` on each check
+  ([3.4](../report-format.md#34-check)). They must name the checks that each roll-up check requires
+  in their documentation. Their `certify_plan()` must give `total` and `risks`
+  ([2.6](../report-format.md#26-the-plan-function)). Their level `quick` must not run a check of an
+  item that already has a reviewed pass ([2.7](../report-format.md#27-the-two-levels)). They must
+  write the schema id `skellycertify.report/1.4.0`.
+- **skellycam: write `notices` ([ADR-V1TR](entries/V1TR-format-1-4-0.md)).** Give a notice when the
+  person must do something after the run, for example replug a camera
+  ([3.8](../report-format.md#38-notices)). Keep each notice code with its meaning and its text for
+  the person in the list of the reason codes ([5.4](../report-format.md#54-codes-of-a-package)).
+- **freemocap: the app side of format 1.4.0 ([ADR-V1TR](entries/V1TR-format-1-4-0.md)).** Write the
+  table `Checks that did not pass:` of [4.2](../report-format.md#42-layout) part 7 in the Markdown
+  writer. Turn each notice code of each package into its text for the person
+  ([3.8](../report-format.md#38-notices)). Show the `risks` of each plan at the consent. Do not
+  offer a run of a level when the `total` of each plan is 0
+  ([2.6](../report-format.md#26-the-plan-function)).
+- **skellytracker: `over-budget` and the 3.6 layout
+  ([ADR-V1TR](entries/V1TR-format-1-4-0.md)).** Give a check that did not run because the time limit
+  of the level was used up the result `not-run` with `over-budget`
+  ([5.3](../report-format.md#53-common-reason-codes)). When the session checks of the quick layout
+  have landed in skellytracker, update the layout of
+  [3.6](../report-format.md#36-example-skellytracker) in this repository.
 - **skellytracker: write format 1.3.0
   ([ADR-F1KN](entries/F1KN-format-1-2-0-markdown-layout-revised.md),
   [ADR-D1PW](entries/D1PW-format-1-3-0.md)).** In the module report of `certify()`, fill `summary`
