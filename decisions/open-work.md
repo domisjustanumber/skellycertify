@@ -22,6 +22,13 @@ task. Delete an item when its work is done. The PR that closes an item records t
   this format, fill `summary` with one `camera` item for each camera. Take the name from the model
   string of the device. Remove the name of a person (rule 16 of
   [section 6](../report-format.md#6-privacy-rules)).
+- **Each package: check the quick run against the three rules
+  ([ADR-M8J1](entries/M8J1-quick-and-full-levels-defined.md)).** skellytracker, freemocap and
+  skellycam must check that their quick run takes no more than 2 minutes (in an app run, together
+  with the other packages), downloads nothing (`certify_plan("quick")` returns an empty `downloads`
+  list) and shows that each recording, realtime and post-hoc session of the package can start and
+  run ([2.7](../report-format.md#27-the-two-levels)). skellytracker must check first that its plugin
+  packs of the quick pairs are in the installed package ([3.6](../report-format.md#36-example-skellytracker)).
 - **freemocap: write format 1.2.0
   ([ADR-F1KN](entries/F1KN-format-1-2-0-markdown-layout-revised.md)).** Write the report file of the
   app in the layout of [4.2](../report-format.md#42-layout) (one system list, the GPU table and one list line for each module) with

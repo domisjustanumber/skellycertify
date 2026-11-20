@@ -45,7 +45,7 @@ The function returns one module report ([section 3](#3-the-module-report)).
 
 | Argument | Type | Meaning |
 |---|---|---|
-| `level` | `"quick"` or `"full"` | `quick` is the default level. It takes seconds. `full` is opt-in. It takes minutes. |
+| `level` | `"quick"` or `"full"` | `quick` is the default level. `full` is opt-in. [2.7](#27-the-two-levels) gives the rules of the two levels. |
 | `progress` | callable or `None` | The function calls it with one progress message (a `dict`). See [2.3](#23-progress-messages). |
 | `cancel` | object or `None` | An object with a method `is_set() -> bool`, for example `threading.Event` or `multiprocessing.Event`. See [2.4](#24-cancel). |
 
@@ -213,6 +213,26 @@ Each item of `downloads` gives the file name and its size in bytes.
 The app must show the plan of each package to the user. The app must get the consent of the user
 before it calls `certify()`. The app asks one time for all packages. After the run, the app asks
 the questions and puts the answers in `answers`.
+
+### 2.7 The two levels
+
+**Level `quick`.** A package must obey these three rules:
+
+1. The whole quick run must take no more than 2 minutes. The limit is for the whole run. When an
+   app runs each package in one run, the limit is 2 minutes for all packages together, not for each
+   package. A package that runs alone has the same limit.
+2. The quick run must download nothing. Each file that it needs must be in the package at install
+   time: in the installer of the app or in the installed package. So `certify_plan("quick")` must
+   return an empty `downloads` list.
+3. The quick run must be enough to show that a recording, a realtime pipeline session and a
+   post-hoc session can at least start and run. This applies to each of these that the package has.
+
+A check that runs too long is a result in the report ([2.5](#25-runtime-rules), "Time limits").
+
+**Level `full`.** The level `full` is open for now. It can download test files. It can download only
+the files that its plan names, with the consent of the user ([2.6](#26-the-plan-function)). It can
+take longer on the system. It can run full benchmarks. The owner can make these rules tighter
+later.
 
 ## 3. The module report
 
