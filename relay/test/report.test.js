@@ -18,7 +18,7 @@ test('the format sample is refused for its schema', () => {
 
 test('the reader takes the last json block, and a longer fence is allowed', () => {
   const text = '# Certify report\n\n```json\n{"x": 1}\n```\n\n````json\n' + JSON.stringify(validData()) + '\n````\n';
-  assert.equal(JSON.parse(splitReport(text).json).schema, 'skellycertify.report/1.0.0');
+  assert.equal(JSON.parse(splitReport(text).json).schema, 'skellycertify.report/1.2.0');
 });
 
 test('the file must end with the block and one newline', () => {
@@ -109,6 +109,40 @@ test('a check needs no section when the module has no sections', () => {
   delete d.modules[0].sections;
   d.modules[0].checks.forEach((c) => delete c.section);
   assert.ok(parseReport(reportFile(d)));
+});
+
+test('summary: optional; when present at most 200 items of the form of section 3.7', () => {
+  const ok = [
+    (m) => delete m.summary,
+    (m) => { m.summary = []; },
+    (m) => { m.summary = Array.from({ length: 200 }, () => ({ group: 'camera', name: 'n'.repeat(80), device: 'd'.repeat(40), result: 'record-only' })); },
+    (m) => { m.summary[0].extra = 1; }, // a reader ignores a field that it does not know
+  ];
+  for (const change of ok) {
+    const d = validData();
+    change(d.modules[0]);
+    assert.ok(parseReport(reportFile(d)));
+  }
+  const W = 'report.modules[0].summary';
+  const bad = [
+    [(m) => { m.summary = {}; }, 'bad-value', W],
+    [(m) => { m.summary = null; }, 'bad-value', W],
+    [(m) => { m.summary = Array.from({ length: 201 }, () => m.summary[0]); }, 'bad-value', W],
+    [(m) => { m.summary[1] = 'CUDA'; }, 'bad-value', `${W}[1]`],
+    [(m) => { m.summary[0].group = 'gpu'; }, 'bad-value', `${W}[0].group`],
+    [(m) => delete m.summary[0].group, 'missing-field', `${W}[0].group`],
+    [(m) => { m.summary[0].name = ''; }, 'bad-value', `${W}[0].name`],
+    [(m) => { m.summary[0].name = 'n'.repeat(81); }, 'bad-value', `${W}[0].name`],
+    [(m) => { m.summary[0].name = 7; }, 'bad-value', `${W}[0].name`],
+    [(m) => { m.summary[0].device = 'd'.repeat(41); }, 'bad-value', `${W}[0].device`],
+    [(m) => delete m.summary[0].device, 'missing-field', `${W}[0].device`],
+    [(m) => { m.summary[0].result = 'not-run'; }, 'bad-value', `${W}[0].result`],
+  ];
+  for (const [change, code, detail] of bad) {
+    const d = validData();
+    change(d.modules[0]);
+    refused(reportFile(d), code, detail);
+  }
 });
 
 test('id: optional; when present a version 4 UUID in lower case; a repeat is allowed', () => {

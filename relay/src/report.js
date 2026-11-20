@@ -16,6 +16,9 @@ const CHECK_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9_.:@-]{0,127}$/;
 const ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/; // a version 4 UUID in lower case
 const KINDS = ['quick', 'full', 'passive'];
 export const RESULTS = ['pass', 'fail', 'not-run', 'record-only'];
+const SUMMARY_GROUPS = ['ep', 'gpu-jpeg', 'camera'];
+const SUMMARY_RESULTS = ['pass', 'fail', 'record-only'];
+const SUMMARY_ITEMS = 200; // a limit of the relay, so that the issue body stays small
 
 // Split the file into the Markdown part and the JSON text of the last fenced `json` block.
 // The file must end with that block and one "\n" (section 4.2).
@@ -82,6 +85,16 @@ function checkModule(m, where) {
       need(s, 'name', w, str);
       need(s, 'result', w, (v) => RESULTS.includes(v));
       need(s, 'reason', w, strOrNull);
+    });
+  }
+  if ('summary' in m) { // section 3.7
+    need(m, 'summary', where, (v) => Array.isArray(v) && v.length <= SUMMARY_ITEMS).forEach((s, i) => {
+      const w = `${where}.summary[${i}]`;
+      if (!isObj(s)) throw new Refused('bad-value', w);
+      need(s, 'group', w, (v) => SUMMARY_GROUPS.includes(v));
+      need(s, 'name', w, (v) => str(v) && v.length > 0 && [...v].length <= 80);
+      need(s, 'device', w, (v) => v === null || (str(v) && [...v].length <= 40));
+      need(s, 'result', w, (v) => SUMMARY_RESULTS.includes(v));
     });
   }
   if ('cleanup' in m) {

@@ -19,6 +19,19 @@ test('the valid samples keep every rule', () => {
   }
 });
 
+test('the strings of summary obey the same rules', () => {
+  const rule = (field, value) => {
+    const d = validData();
+    d.modules[0].summary[0][field] = value;
+    return privacyRule(md, d);
+  };
+  assert.equal(rule('name', 'Camera of a@example.com'), 5);
+  assert.equal(rule('name', 'C:\\x'), 1);
+  assert.equal(rule('device', '00:1a:2b:3c:4d:5e'), 4);
+  assert.equal(rule('device', '0000:01:00.0'), 3);
+  assert.equal(rule('device', '10de:2484'), 0, 'a PCI id is allowed');
+});
+
 test('the privacy sample breaks rule 1', () => {
   const { markdown, data } = parseReport(sample('refused-privacy.md'));
   assert.equal(privacyRule(markdown, data), 1);

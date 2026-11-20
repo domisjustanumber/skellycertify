@@ -32,20 +32,35 @@ characters of the hash.
 
 ### The issue
 
-The relay builds the issue only from the facts of the JSON block, and from the note:
+The relay builds the issue only from the JSON block. It never uses the Markdown part. The body
+shows the summary of [report-format.md 4.2](../report-format.md#42-layout), with the display names
+of 4.2.
 
-- Title: `[certify] <app or package> <version> · <OS label> · <GPU model names>`.
-- One line for each module: valid or not valid as evidence, with the reason codes. The line shows
-  the `id` of the module when it has one. It shows the number of checks for each result that
-  occurs, in the order `pass`, `fail`, `not-run`, `record-only`.
-- A table of the failed rows: module (with its `id`, if any), section or check, result, reason. It has
-  one row for each section with the result `fail`, or for each check with the result `fail` when
-  the module has no sections. The table comes from the JSON, not from the Markdown part. If no row
-  has the result `fail`, the body has the line `No failed section or check.` and no table. If the
-  body is longer than 65,536 characters, the relay removes rows from the end of the table and says
-  so. The report file holds all checks.
+- Title: `[certify] <app or package> <version> · <OS> · <GPUs>`. The relay writes `FMC` for
+  `freemocap`, `Win` for `Windows` and `Mac` for `macOS`. Other names stay in full. `<GPUs>` are
+  the GPU names without VRAM, each name one time. Example:
+  `[certify] FMC 2.0.0 · Win 11 26H2 · NVIDIA RTX 3070, Intel UHD 770`. A report with no GPU has
+  `no GPU`.
+- In test mode, the first line is `**Test of the relay.** This issue is never evidence.`
+- The header of 4.2. For one module with `"app": null`, it is one line. Else it is the app line and
+  one list line for each module. Each module line shows the `id` of the module when it has one. It
+  shows at most 10 reason codes, then `and <n> more`. The body shows at most 100 module lines.
+- The system list: `- OS:`, `- CPU:` and `- RAM:`.
+- The GPU table `| GPU | Module | Result |`, from the `summary` items and `host.gpus`. A module
+  with no `summary` (format 1.1.0 or earlier) gives no item rows. Each GPU that no `ep` item names
+  has the result `not checked`. When no module has `summary`, that result is
+  `no summary in the report`, because the EPs of such a file can have run.
+- The camera table, or the line `Cameras: not checked on this system.`
+- Only when a section or a check failed: `Failed checks:` and the table
+  `| Module | Check | Reason |`. It has one row for each section with the result `fail`, or for
+  each check with the result `fail` when the module has no sections. The `Module` cell also shows
+  the `id` of the module.
 - The note as a quote, at most 2000 characters.
 - The link to the file, the SHA-256 and a hidden marker `<!-- skellycertify-report sha256:<hash> -->`.
+
+If the body is longer than 65,536 characters, the relay removes rows from the end of the tables
+and says so. It removes the failed rows first, then the camera rows, the GPU rows and the module
+lines. The report file holds all rows.
 
 Each report string is untrusted. The relay removes each character that can start a mention, an
 issue link, HTML or a Markdown link (`@`, `#`, `<`, `>`, `[`, `]`, `!`, `|`, `` ` ``, `*` and
@@ -403,8 +418,9 @@ Success: `HTTP 200`, `"duplicate":false` and a line `Issue: https://github.com/d
 1. Open the issue. Check that:
    - it has the labels `certify-report` and `relay-test`;
    - the first line says `Test of the relay`;
-   - the title and the module line agree with `samples/valid.md`. That sample has no `fail` row, so
-     the body has the line `No failed section or check.` and no table;
+   - the title is `[certify] FMC 2.0.0 · Win 11 26H2 · NVIDIA RTX 3070, Intel UHD 770`;
+   - the module line, the system list and the GPU table agree with the Markdown part of
+     `samples/valid.md`. That sample has no `fail` row, so the body has no `Failed checks:` table;
    - the author is your account (Part 2 changes this to the app).
 2. Click the link of the report file. GitHub shows `inbox/test/<sha256>.md` at one commit.
 3. Open `https://github.com/domisjustanumber/skellycertify/tree/inbox/inbox/test`. It holds the
