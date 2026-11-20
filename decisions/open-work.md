@@ -9,9 +9,17 @@ task. Delete an item when its work is done. The PR that closes an item records t
 - **The relay: turn off the test mode.** The live relay runs in test mode since 2026-11-20 for the
   first hand-ins from freemocap. No report counts as evidence while it is on. Set `TEST_MODE` to
   `"false"` in `relay/wrangler.jsonc` and deploy, with the approval of the owner.
-- **The relay: deploy format 1.4.0 ([ADR-V1TR](entries/V1TR-format-1-4-0.md)).** The live relay
-  does not have the code of format 1.4.0 yet: the check of `notices` and the table
-  `Checks that did not pass:`. Deploy the relay with the approval of the owner.
+- **The relay: deploy and switch on ([ADR-V1TR](entries/V1TR-format-1-4-0.md),
+  [ADR-MM1F](entries/MM1F-relay-hardened-after-security-review.md)).** The live relay is switched
+  off since 2026-11-20. It does not have the code of format 1.4.0 and of the hardening yet. Deploy
+  the relay and switch it on, with the approval of the owner. Before volunteers use it, add the
+  branch rule on `main` of `relay/README.md` Part 2 step 7.
+- **freemocap: the clean note and the content type
+  ([ADR-MM1F](entries/MM1F-relay-hardened-after-security-review.md)).** Before the app shows the
+  file to the person, the app must make the note clean (rule 18 of
+  [section 6](../report-format.md#6-privacy-rules)). The app must send the file with the content
+  type `text/markdown` ([4.1](../report-format.md#41-content)). The Markdown writer must print no
+  `<`, `](`, `]:`, `://`, `www.` and no IPv4 address (rules 17 and 20).
 - **Each package: write format 1.4.0 ([ADR-V1TR](entries/V1TR-format-1-4-0.md)).** skellytracker,
   skellycam and freemocap must give one check for each test and write `module` on each check
   ([3.4](../report-format.md#34-check)). They must name the checks that each roll-up check requires
@@ -53,7 +61,10 @@ task. Delete an item when its work is done. The PR that closes an item records t
   ([3.7](../report-format.md#37-summary)). Take the name from the model string of the device.
   Remove the name of a person (rule 16 of [section 6](../report-format.md#6-privacy-rules)). Use
   `partial` and `skipped` with `busy` for a camera. Refuse the run with `cameras-busy` when skellycam
-  cannot get the cameras ([2.5](../report-format.md#25-runtime-rules)).
+  cannot get the cameras ([2.5](../report-format.md#25-runtime-rules)). Give each camera item a
+  `gate`: the name of the roll-up check of the native capture of that model, for example
+  `046d-085c:gate`. Name the checks that it requires in the documentation of skellycam
+  ([ADR-T191](entries/T191-gate-of-a-summary-item.md)).
 - **Each package: check the quick run against the three rules
   ([ADR-M8J1](entries/M8J1-quick-and-full-levels-defined.md)).** skellytracker, freemocap and
   skellycam must check that their quick run takes no more than 2 minutes (in an app run, together

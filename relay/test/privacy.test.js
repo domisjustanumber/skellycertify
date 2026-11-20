@@ -1,8 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { privacyRule, stringRule } from '../src/privacy.js';
+import { privacyRule, stringRule, duplicateKey, PATH_RE, PCI_RE, MAC_RE, EMAIL_RE, IPV4_RE } from '../src/privacy.js';
 import { parseReport } from '../src/report.js';
-import { sample, validData } from './helpers.js';
+import { sample, validData, NOW } from './helpers.js';
+
+const parse = (text) => parseReport(text, NOW);
 
 const md = ['# Certify report', '', 'A line.'];
 // Put one string in a details object of the valid data and return the rule.
@@ -14,7 +16,7 @@ const inDetails = (value) => {
 
 test('the valid samples keep every rule', () => {
   for (const name of ['valid.md', 'valid-quick.md']) {
-    const { markdown, data } = parseReport(sample(name));
+    const { markdown, data } = parse(sample(name));
     assert.equal(privacyRule(markdown, data), 0, name);
   }
 });
@@ -33,7 +35,7 @@ test('the strings of summary obey the same rules', () => {
 });
 
 test('the privacy sample breaks rule 1', () => {
-  const { markdown, data } = parseReport(sample('refused-privacy.md'));
+  const { markdown, data } = parse(sample('refused-privacy.md'));
   assert.equal(privacyRule(markdown, data), 1);
 });
 
@@ -131,4 +133,67 @@ test('rule 11: note is null or a short string', () => {
 
 test('the lowest rule number wins', () => {
   assert.equal(inDetails(['someone@example.org', 'C:\\x']), 1);
+});
+
+test('rule 6 is tested first: no pattern runs on a string longer than 2000 characters', () => {
+  assert.equal(stringRule('C:\\' + 'x'.repeat(2001)), 6);
+  assert.equal(privacyRule([`<${'x'.repeat(2001)}`], validData()), 6);
+});
+
+test('each pattern costs linear time: a 250,000-character line finishes well under 1 second', () => {
+  for (const s of ['a'.repeat(250_000), 'a.'.repeat(125_000), '@a-'.repeat(83_334)]) {
+    for (const [name, re] of Object.entries({ PATH_RE, PCI_RE, MAC_RE, EMAIL_RE, IPV4_RE })) {
+      const t = performance.now();
+      re.test(s);
+      const ms = performance.now() - t;
+      assert.ok(ms < 250, `${name} on ${s.slice(0, 3)}…: ${ms.toFixed(0)} ms`);
+    }
+    const t = performance.now();
+    privacyRule([s], validData());
+    assert.ok(performance.now() - t < 250, 'privacyRule');
+  }
+  assert.ok(EMAIL_RE.test('mail a.b+c@sub.example.co now'), 'the bound pattern still finds an address');
+});
+
+test('rule 17: the Markdown part holds no "<", "](", "]:", "://" or "www."', () => {
+  for (const line of ['a <b>', 'see [x](y)', 'https: no, ftp://x', 'WWW.example', 'a_www.example', '<', '[x]: y', '  [ref]:']) {
+    assert.equal(privacyRule([line], validData()), 17, line);
+  }
+  for (const line of ['> a quote', '| a | b |', 'trt-rtx@10de-2484-0:image', 'a ] (b)', 'a ] : b', 'www example']) {
+    assert.equal(privacyRule([line], validData()), 0, line);
+  }
+  assert.equal(inDetails('<private>'), 0, 'rule 17 is about the Markdown');
+});
+
+test('rule 18: the note is clean', () => {
+  const rule = (note) => { const d = validData(); d.note = note; return privacyRule(md, d); };
+  for (const note of ['Line one.\nLine two: 5 min, 30% (ok) - fine? yes/no; a_b + c = d · Ünïcödé 日本語 1/2', '', 'x'.repeat(2000), "it's"]) {
+    assert.equal(rule(note), 0, note.slice(0, 20));
+  }
+  for (const note of ['a <b>', '@me', '#1', 'a\tb', 'a\r\nb', 'a\u0000b', 'mail me!', '[x]', '`code`', '*', 'see http://x', 'www.x', 'WwW.x', 'a\u202eb', '😀']) {
+    assert.equal(rule(note), 18, JSON.stringify(note));
+  }
+});
+
+test('rule 19: the same key two times in one object of the JSON text', () => {
+  assert.equal(duplicateKey('{"a": 1, "b": {"a": 2}, "c": [{"a": 3}, {"a": 4}]}'), false, 'one key in different objects');
+  assert.equal(duplicateKey('{"a": 1, "a": 2}'), true);
+  assert.equal(duplicateKey('{"x": {"k": "v", "k": "w"}}'), true);
+  assert.equal(duplicateKey('{"a": 1, "\\u0061": 2}'), true, 'an escaped key is the same key');
+  assert.equal(duplicateKey('{"a": "\\"a\\": , {", "b": ["a", "a"]}'), false, 'strings and list values are not keys');
+  assert.equal(duplicateKey('[{"a": 1}, {"a": 1}]'), false);
+  const { markdown, data, json } = parse(sample('valid.md'));
+  assert.equal(privacyRule(markdown, data, json), 0);
+  assert.equal(privacyRule(markdown, data, json.replace('"note":', '"note": null, "note":')), 19);
+});
+
+test('rule 20: an IPv4 address in the Markdown part or the note; not in other JSON values', () => {
+  assert.equal(privacyRule(['from 192.0.2.44 today'], validData()), 20);
+  assert.equal(privacyRule(['255.255.255.255'], validData()), 20);
+  assert.equal(privacyRule(['1.2.3.256 and 300.1.1.1 and 1.2.3'], validData()), 0);
+  const d = validData();
+  d.note = 'my address is 203.0.113.9';
+  assert.equal(privacyRule(md, d), 20);
+  assert.equal(inDetails('32.0.101.6881'), 0, 'a driver version in the JSON');
+  assert.equal(inDetails('203.0.113.9'), 0, 'rule 20 is only for the Markdown part and the note');
 });

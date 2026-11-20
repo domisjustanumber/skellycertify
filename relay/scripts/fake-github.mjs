@@ -17,9 +17,10 @@ export function createFakeGitHub({ owner = 'domisjustanumber', repo = 'skellycer
   const state = {
     refs: { main: sha() },
     files: new Map(), // "branch:path" -> { content (base64), commit }
+    commits: [], // { sha, branch, message, date }, oldest first
     issues: [],
     calls: [],
-    installationTokens: new Set(),
+    installationTokens: new Map(), // token -> the client id of the app
     jwtIssuers: [],
   };
   const base = `/repos/${owner}/${repo}`;
@@ -32,8 +33,7 @@ export function createFakeGitHub({ owner = 'domisjustanumber', repo = 'skellycer
     const ok = await crypto.subtle.verify('RSASSA-PKCS1-v1_5', appPublicKey, b64(s), new TextEncoder().encode(`${h}.${c}`));
     const header = JSON.parse(new TextDecoder().decode(b64(h)));
     const claims = JSON.parse(new TextDecoder().decode(b64(c)));
-    const now = Math.floor(Date.now() / 1000);
-    if (!ok || header.alg !== 'RS256' || claims.exp - claims.iat > 600 || claims.exp < now) return null;
+    if (!ok || header.alg !== 'RS256' || claims.exp - claims.iat > 600 || claims.exp < Math.floor(now() / 1000)) return null;
     return claims.iss;
   }
 
@@ -54,7 +54,7 @@ export function createFakeGitHub({ owner = 'domisjustanumber', repo = 'skellycer
       if (!iss) return reply(401, { message: 'A JSON web token could not be decoded' });
       state.jwtIssuers.push(iss);
       const t = `ghs_fake${sha()}`;
-      state.installationTokens.add(t);
+      state.installationTokens.set(t, iss);
       return reply(201, { token: t, expires_at: new Date(Date.now() + 3_600_000).toISOString() });
     }
     const bearer = auth.replace(/^Bearer /, '');
@@ -88,12 +88,23 @@ export function createFakeGitHub({ owner = 'domisjustanumber', repo = 'skellycer
         const commit = sha();
         state.refs[body.branch] = commit;
         state.files.set(key, { content: body.content, commit });
+        state.commits.push({ sha: commit, branch: body.branch, message: body.message, date: new Date(now()).toISOString() });
         return reply(201, { content: { path: filePath, sha: sha() }, commit: { sha: commit } });
       }
     }
     if (rest === '/commits' && method === 'GET') {
-      const f = state.files.get(`${u.searchParams.get('sha')}:${u.searchParams.get('path')}`);
-      return reply(200, f ? [{ sha: f.commit }] : []);
+      const branch = u.searchParams.get('sha');
+      if (u.searchParams.has('path')) {
+        const f = state.files.get(`${branch}:${u.searchParams.get('path')}`);
+        return reply(200, f ? [{ sha: f.commit }] : []);
+      }
+      if (!state.refs[branch]) return reply(404, { message: `No commit found for SHA: ${branch}` });
+      const since = Date.parse(u.searchParams.get('since') ?? '') || 0;
+      const perPage = Number(u.searchParams.get('per_page')) || 30;
+      const page = Number(u.searchParams.get('page')) || 1;
+      const list = [...state.commits].reverse().filter((c) => c.branch === branch && Date.parse(c.date) >= since)
+        .map((c) => ({ sha: c.sha, commit: { message: c.message, committer: { date: c.date } } }));
+      return reply(200, list.slice((page - 1) * perPage, page * perPage));
     }
     if ((r = /^\/issues\/(\d+)$/.exec(rest)) && method === 'GET') {
       const issue = state.issues.find((i) => i.number === Number(r[1]));
@@ -109,7 +120,10 @@ export function createFakeGitHub({ owner = 'domisjustanumber', repo = 'skellycer
     if (rest === '/issues' && method === 'POST') {
       if (typeof body.body === 'string' && body.body.length > 65536) return reply(422, { message: 'body is too long' });
       const number = state.issues.length + 1;
+      const app = state.installationTokens.get(bearer); // an App token: the app is the author
       const issue = { number, title: body.title, body: body.body, labels: body.labels.map((name) => ({ name })),
+        user: app ? { login: 'relay[bot]', type: 'Bot' } : { login: owner, type: 'User' },
+        performed_via_github_app: app ? { client_id: app } : null,
         created_at: new Date(now()).toISOString(),
         html_url: `https://github.com/${owner}/${repo}/issues/${number}` };
       state.issues.push(issue);

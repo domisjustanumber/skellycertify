@@ -22,8 +22,8 @@ A report comes from the issue form or from the [relay](relay/README.md).
 3. An issue with the label `relay-test` is a test of the relay. It is never evidence. Do not commit
    its file to `reports/`. Close the issue.
 
-The relay already checked the form and privacy rules 1 to 11. Do sections 2 and 3 again: the
-relay is not the reviewer.
+The relay already checked the form and privacy rules 1 to 11 and 17 to 20. Do sections 2 and 3
+again: the relay is not the reviewer.
 
 ## 2. Check the form
 
@@ -36,9 +36,14 @@ If a step fails, go to [6.3](#63-a-report-that-you-cannot-read).
 
 ## 3. Check privacy
 
-1. Check each statement 1 to 11 of the [privacy rules](report-format.md#6-privacy-rules).
+1. Check each statement 1 to 11 and 17 to 20 of the
+   [privacy rules](report-format.md#6-privacy-rules).
 2. Read the whole Markdown part and the note. Look for a name, contact details, a path, a host
    name or other personal details that no rule found.
+
+The privacy rules stop accidents. They cannot stop a sender who wants to publish personal data of a
+person: a name, a phone number or a street address passes the rules. You and a fast removal of the
+file are the defence. So do step 2 for each report, and remove personal data at once.
 
 If you find personal data:
 
@@ -64,9 +69,8 @@ Do these steps for each module report in `modules`. One module can be valid and 
    check never changes it. The report gives a `pass` or a `fail` also on a GPU whose hardware class
    does not list the execution provider, for example `directml` on a GPU that is not from AMD. Write
    the row as for each other pair. The row says only what the report measured for this EP, OS and
-   GPU. The catalog of the package decides if the pair is offered. A pair whose summary item has the
-   result `partial` or `skipped` gives no row. It is a record only
-   ([7.2](report-format.md#72-kinds-of-evidence)).
+   GPU. The catalog of the package decides if the pair is offered. A pair whose summary item gives
+   no row by step 4 is a record only.
 
    A pair that uses a plugin pack needs two facts in `details.eps["<label>"]`, read from the
    installed pack: `installed_pack_version` and `wheels_match_lock`
@@ -91,6 +95,11 @@ Do these steps for each module report in `modules`. One module can be valid and 
    - A `passive` module is not valid in this version.
    - A row from a `passive` record never replaces a row that the package requires from a
      maintainer. For example, skellytracker requires maintainer rows for an NVIDIA version bump.
+   - A summary item with the result `skipped` never gives a row.
+   - A summary item with the result `partial` gives a row only when it has a `gate` and the check
+     that its `gate` names has the result `pass`. A `partial` item with no `gate` gives no row.
+     The row keeps each check of the item that did not pass. The package defines the form of the
+     row ([ADR-T191](decisions/entries/T191-gate-of-a-summary-item.md)).
 
 A module that passes steps 1 to 3 is accepted. In a skellytracker module, step 3 must also leave at
 least one pair that it does not exclude. When it excludes each pair, the module is a record only.

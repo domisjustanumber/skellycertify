@@ -134,6 +134,7 @@ export function createGitHub(env, { fetch = globalThis.fetch, now = Date.now } =
   // Return { status, json }. Throw a GitHubError for a status that is not in `ok`.
   async function call(method, path, body, ok = [200, 201]) {
     const res = await raw(method, path, body, await token());
+    if (res.status === 401 && mode === 'app') cachedInstallation = null; // the next request gets a new token
     if (!ok.includes(res.status)) throw failureCode(res);
     const text = await res.text();
     return { status: res.status, json: text ? JSON.parse(text) : null };
@@ -180,25 +181,32 @@ export function createGitHub(env, { fetch = globalThis.fetch, now = Date.now } =
       const got = await call('GET', `${r}/issues/${number}`, null, [200, 404, 410]);
       return got.status === 200 ? got.json : null;
     },
-    // Find an issue whose body holds the marker, in the 100 newest issues. No search index is used,
-    // so an issue made seconds ago is found.
-    async findIssue(markerText) {
-      const got = await call('GET', `${r}/issues?state=all&sort=created&direction=desc&per_page=100`);
-      return got.json.find((i) => !i.pull_request && typeof i.body === 'string' && i.body.includes(markerText)) ?? null;
+    // Find an issue with the label whose body holds the marker, in the 100 newest issues. Only an
+    // issue that this relay's app wrote counts: anybody can write the marker in an issue. With the
+    // token of Part 1 there is no app, so no issue counts. No search index is used, so an issue
+    // made seconds ago is found.
+    async findIssue(markerText, label) {
+      if (mode !== 'app') return null;
+      const got = await call('GET', `${r}/issues?labels=${encodeURIComponent(label)}&state=all&sort=created&direction=desc&per_page=100`);
+      return got.json.find((i) => !i.pull_request && typeof i.body === 'string' && i.body.includes(markerText)
+        && i.performed_via_github_app?.client_id === env.GITHUB_APP_CLIENT_ID) ?? null;
     },
-    // Count the issues with the label that were created since `sinceMs`, up to `max`.
-    // Newest first, 100 for each page: at most ceil(max / 100) calls. Pull requests do not count.
-    async countIssuesSince(label, sinceMs, max) {
+    // Count the commits on the branch since `sinceMs` whose message matches `re`, up to `max`.
+    // Newest first, 100 for each page, at most `pages` calls. When each page is full and the count is
+    // still below `max`, the count is unknown: return `max`, so that the caller refuses (fail closed).
+    async countCommitsSince(branch, sinceMs, re, max, pages) {
       let n = 0;
-      for (let page = 1; n < max && page <= Math.ceil(max / 100); page++) {
-        const got = await call('GET', `${r}/issues?labels=${encodeURIComponent(label)}&state=all&sort=created&direction=desc&per_page=100&page=${page}`);
-        for (const i of got.json) {
-          if (Date.parse(i.created_at) < sinceMs) return n;
-          if (!i.pull_request) n++;
+      for (let page = 1; page <= pages; page++) {
+        const got = await call('GET', `${r}/commits?sha=${encodeURIComponent(branch)}&since=${new Date(sinceMs).toISOString()}&per_page=100&page=${page}`, null, [200, 404, 422]);
+        if (got.status !== 200) {
+          // GitHub gives no list for a branch that does not exist yet. Then no report was committed.
+          if ((await call('GET', `${r}/git/ref/heads/${enc(branch)}`, null, [200, 404])).status === 404) return 0;
+          throw new GitHubError('github-unavailable', got.status);
         }
-        if (got.json.length < 100) break;
+        n += got.json.filter((c) => re.test(c.commit?.message ?? '')).length;
+        if (n >= max || got.json.length < 100) return n;
       }
-      return n;
+      return max;
     },
     async createIssue(title, body, labels) {
       return (await call('POST', `${r}/issues`, { title, body, labels }, [201])).json;

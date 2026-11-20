@@ -20,11 +20,52 @@ test('neutral() removes mention, link, HTML and Markdown starters', () => {
     const n = neutral(s, 500);
     assert.doesNotMatch(n, /[@#<>[\]!`|*\n‮]/, s);
     assert.doesNotMatch(n, /:\/\//, s);
-    assert.doesNotMatch(n, /\bwww\./i, s);
+    assert.doesNotMatch(n, /www\./i, s);
   }
   assert.equal(neutral('NVIDIA GeForce RTX 3070'), 'NVIDIA GeForce RTX 3070');
   assert.equal(neutral('Windows 11 Home 26H2'), 'Windows 11 Home 26H2');
   assert.equal(neutral('x'.repeat(50), 10), `${'x'.repeat(9)}…`);
+});
+
+test('neutral() breaks www. after any character and GH-<digits> in any case', () => {
+  assert.equal(neutral('a_www.example.org'), 'a_www .example.org');
+  assert.equal(neutral('xWWW.example'), 'xWWW .example');
+  assert.equal(neutral('see GH-12 and gh-3, gh-x'), 'see GH- 12 and gh- 3, gh-x');
+  assert.equal(neutral('high-end'), 'high-end');
+});
+
+test('the printing helpers take only a string or a finite number; each other JSON value is empty', () => {
+  for (const v of [{ toString: 1 }, { a: 1 }, ['x'], true, false, null, undefined]) {
+    assert.equal(neutral(v), '', JSON.stringify(v));
+    assert.equal(gpuName(v), '');
+    assert.equal(cpuName(v), '');
+    assert.equal(osLabel(v), '');
+  }
+  assert.equal(neutral(26300), '26300');
+  assert.equal(gpuName('NVIDIA GeForce RTX 3070'), 'NVIDIA RTX 3070');
+  const d = validData();
+  d.modules[0].host.gpus[0] = { name: { toString: 1 }, id: { toString: 1 }, vram_bytes: 'x' };
+  d.modules[0].host.os = { label: { toString: 1 }, name: ['Windows'] };
+  d.modules[0].host.cpu = { name: { toString: 1 } };
+  assert.doesNotThrow(() => buildTitle(d));
+  assert.doesNotThrow(() => buildBody(args(d)));
+});
+
+test('a null host field (unknown, 3.3) prints nothing, never "null"', () => {
+  const d = validData();
+  const h = d.modules[0].host;
+  for (const f of Object.keys(h.os)) h.os[f] = null;
+  h.cpu.name = null;
+  h.memory_bytes = null;
+  for (const g of h.gpus) Object.assign(g, { vendor: null, driver_version: null, vram_bytes: null });
+  const title = buildTitle(d);
+  const body = buildBody(args(d));
+  assert.ok(!/null/i.test(title), title);
+  assert.ok(!/null/i.test(body), body);
+  assert.ok(title.includes('unknown OS'));
+  assert.ok(!/- (?:OS|CPU|RAM):/.test(body), 'no empty system line');
+  d.modules[0].host = { os: null, cpu: null, gpus: null, memory_bytes: null };
+  assert.ok(!/null/i.test(buildTitle(d) + buildBody(args(d))));
 });
 
 test('display names of report-format.md 4.2', () => {
@@ -114,7 +155,7 @@ test('the body of the valid sample is the summary of 4.2, with the link and the 
     '',
     'Note of the person:',
     '',
-    '> Example note: the run took about five minutes. This file is a sample for the relay tests. It holds example values only.',
+    '> `Example note: the run took about five minutes. This file is a sample for the relay tests. It holds example values only.`',
     '',
     `Report file: [inbox/2026/${HASH}.md](${URL_})`,
     `SHA-256: \`${HASH}\``,
@@ -283,7 +324,7 @@ test('hostile report strings are neutral in the body; only the relay marker is H
   d.note = HOSTILE.join('\n');
   const body = buildBody(args(d));
   assert.match(body, /\| not run \|/, 'the hostile not-run row is in the table');
-  const withoutMarker = body.replace(marker(HASH), '').replace(/^> /gm, ''); // the relay's own quote prefix
+  const withoutMarker = body.replace(marker(HASH), '').replace(/^>(?: |$)/gm, ''); // the relay's own quote prefix
   assert.doesNotMatch(withoutMarker, /@|<|>|https:\/\/evil|www\.evil|!\[/);
   assert.equal(body.split('<!-- skellycertify-report sha256:').length, 2, 'a report cannot forge a marker');
 });
@@ -292,8 +333,16 @@ test('the note is at most 2000 characters and keeps its lines as a quote', () =>
   const d = validData();
   d.note = `first\n${'y'.repeat(1990)}\nlast line that does not fit`;
   const body = buildBody(args(d));
-  assert.match(body, /> first\n> y{1990}\n/);
+  assert.match(body, /> `first`\n> `y{1990}`\n/);
   assert.doesNotMatch(body, /does not fit/);
+});
+
+test('each note line is a code span in the quote: no line becomes a heading, a list or a rule', () => {
+  const d = validData();
+  d.note = 'a\n\n# heading\n- item\n---\n1. one\n=== \nsee GH-7';
+  const lines = buildBody(args(d)).split('\n');
+  const i = lines.indexOf('Note of the person:');
+  assert.deepEqual(lines.slice(i + 2, i + 10), ['> `a`', '>', '> `heading`', '> `- item`', '> `---`', '> `1. one`', '> `===`', '> `see GH- 7`']);
 });
 
 test('a long table is shortened to fit the body limit, and the body says so', () => {

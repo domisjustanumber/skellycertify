@@ -13,10 +13,12 @@ The relay does one thing: `POST /reports` with the report file as the body.
 
 1. It checks the limits, the size, the type, the format
    ([report-format.md](../report-format.md) sections 3, 4.1 and 4.2) and the privacy rules 1 to 11
-   of section 6. If a check fails, it writes nothing. It replaces each CRLF with LF before the
-   checks. The stored file and its SHA-256 are those of the LF bytes.
+   and 17 to 20 of section 6. If a check fails, it writes nothing. It replaces each CRLF with LF
+   before the checks. The stored file and its SHA-256 are those of the LF bytes. Then it builds the
+   issue title and body. If that step fails, it writes nothing.
 2. It commits the file to the branch `inbox` at `inbox/<yyyy>/<sha256>.md`. `<yyyy>` is the year
-   of `created_utc` of the first module. `<sha256>` is the SHA-256 of the exact bytes. In test mode
+   of `created_utc` of the first module. The relay accepts only the current UTC year, the year
+   before and the year after. `<sha256>` is the SHA-256 of the exact bytes. In test mode
    the path is `inbox/test/<sha256>.md`. The relay makes the branch from the default branch when the
    branch does not exist. Nobody merges the branch `inbox`.
 3. It opens one issue with the label `certify-report`. The issue links the file at its commit.
@@ -24,7 +26,10 @@ The relay does one thing: `POST /reports` with the report file as the body.
    the issue through this file and creates nothing.
 5. It answers with JSON: `{"issue_url", "issue_number", "file_path", "duplicate"}`.
 
-`GET /health` answers `{"enabled", "test_mode", "schema_major"}`. Each other route answers 404.
+`GET /health` answers `{"enabled", "test_mode", "schema_major"}`. Each other route and each other
+method, also `OPTIONS`, answers 404. The relay sends no CORS header. So a web page in a browser
+cannot send a report to the relay or read its answer. The app is not a web page, so it needs no
+CORS header.
 
 The relay keeps no copy of a report, no database and no Cloudflare storage. It does not store or show the address of the
 sender. Its log line holds only the time, the outcome code, the status, the size and the first 12
@@ -61,7 +66,8 @@ of 4.2.
   and no check of its own has one row. The `Package` cell also shows the `id` of the module. The
   `Module` cell is the `module` of the check or the section. The `Result` cell is `fail` or
   `not run`.
-- The note as a quote, at most 2000 characters.
+- The note as a quote, at most 2000 characters. Each line of the note is in a code span, so a line
+  cannot become a heading, a list or a rule.
 - The link to the file, the SHA-256 and a hidden marker `<!-- skellycertify-report sha256:<hash> -->`.
 
 The body does not show `notices` ([report-format.md 3.8](../report-format.md#38-notices)). They are
@@ -73,7 +79,9 @@ rows and the module lines. The report file holds all rows.
 
 Each report string is untrusted. The relay removes each character that can start a mention, an
 issue link, HTML or a Markdown link (`@`, `#`, `<`, `>`, `[`, `]`, `!`, `|`, `` ` ``, `*` and
-control characters). It breaks `://` and `www.`. It puts report values in code spans.
+control characters). It breaks each `://`, each `www.` and each `GH-` before a digit, so GitHub
+makes no link and no issue reference. It puts report values in code spans. Each value that is not
+a string or a number (an object, a list, a boolean or `null`) prints as empty text.
 
 ## Answers for the app developers
 
@@ -86,13 +94,13 @@ The body never holds report content.
 | 400 | `empty-body` | false | The body is empty. | Fix the app. |
 | 404 | `not-found` | false | Wrong route or method. | Fix the app. |
 | 413 | `too-large` | false | The body is larger than 262,144 bytes (256 KiB). | Offer the issue form at once. |
-| 415 | `wrong-type` | false | Not `text/markdown` or `text/plain`, or a charset other than UTF-8. | Fix the app. |
+| 415 | `wrong-type` | false | Not `text/markdown`, or a charset other than UTF-8. `text/plain` is refused. | Fix the app. |
 | 422 | `not-utf8`, `lone-cr`, `no-json-block`, `bad-json`, `wrong-schema`, `missing-field`, `bad-value` | false | The file does not obey the format. `detail` is a fixed text or a field path such as `report.modules[0].kind`. CRLF line ends are accepted. A CR that is not part of CRLF gives `lone-cr`. | Never retry. Show the code. Offer the issue form at once. |
-| 422 | `privacy-rule` | false | A privacy rule fails. `detail` is the rule number (1 to 11). | Never retry. Tell the person the rule. Offer the issue form at once. |
+| 422 | `privacy-rule` | false | A privacy rule fails. `detail` is the lowest rule number that fails (1 to 11 or 17 to 20). A string longer than 2000 characters gives rule 6, and the relay tests no other pattern on it. | Never retry. Tell the person the rule. Offer the issue form at once. |
 | 429 | `rate-limited` | true | More than 2 POSTs from this address in 60 seconds, in one Cloudflare location. `Retry-After` gives seconds. | Keep the file. Retry on a later app start. |
 | 429 | `busy` | true | More than 10 POSTs from all senders in 60 seconds, in one Cloudflare location. `Retry-After` gives seconds. | Keep the file. Retry on a later app start. |
 | 503 | `relay-off` | true | The owner switched the relay off. | Keep the file. Retry later. |
-| 503 | `daily-cap` | true | 200 issues with the label `certify-report` were created today (UTC). `Retry-After` gives the seconds to 00:00 UTC. | Keep the file. Retry later. |
+| 503 | `daily-cap` | true | The relay made 400 commits on `inbox` today (UTC), the commits of 200 reports. `Retry-After` gives the seconds to 00:00 UTC. | Keep the file. Retry later. |
 | 503 | `credential-rejected` | true | GitHub refused the credential of the relay, for example an expired token. | Keep the file. Retry later. |
 | 503 | `github-rate-limited` | true | GitHub limits the relay. `Retry-After` gives seconds. | Keep the file. Retry later. |
 | 503 | `github-unavailable` | true | GitHub did not answer or failed. | Keep the file. Retry later. |
@@ -110,6 +118,9 @@ Requirements for the app ([report-format.md](../report-format.md) section 4.1):
   "send" from the person.
 - An automatic retry must send only the file that the person accepted, byte for byte. It must
   never send data that the app added later.
+- Before the app shows the file to the person, the app must make the note clean (rule 18 of
+  section 6). The relay does not change the note. It refuses a note that is not clean.
+- The app must send the content type `text/markdown` (optionally `; charset=utf-8`).
 
 A retry of the same file is safe. The relay finds the earlier issue, or makes the issue when an
 earlier request committed the file but failed before the issue.
@@ -121,30 +132,37 @@ The relay uses no Cloudflare storage product. It uses two Rate Limiting bindings
 | Limit | Value | How |
 |---|---|---|
 | Size | 262,144 bytes (256 KiB) | `Content-Length` first, then again while the relay reads the body. |
-| Per sender | 2 POSTs in 60 seconds | Binding `SENDER_LIMIT`. The key is a salted SHA-256 of the sender address (secret `RATE_SALT`), never the address. |
-| Burst | 10 POSTs in 60 seconds | Binding `BURST_LIMIT` with the key `all`. |
-| Daily cap | 200 new reports for each UTC day | GitHub is the counter. Before a new report, the relay counts the issues with the label `certify-report` that were created today. |
+| Per sender | 2 POSTs in 60 seconds | Binding `SENDER_LIMIT`. The key is a salted SHA-256 (secret `RATE_SALT`) of the sender network, never the address: the full IPv4 address, or the /64 network (the first 4 groups) of an IPv6 address. An IPv4-mapped IPv6 address counts as its IPv4 address. |
+| Burst | 10 POSTs in 60 seconds | Binding `BURST_LIMIT` with the key `all`. Only a POST that passed the per-sender limit counts. |
+| Daily cap | 400 relay commits for each UTC day: 200 reports | GitHub is the counter. Before each write, the relay counts its commits on `inbox` since 00:00 UTC. A commit of the relay has a message that starts with one of two fixed forms: `Add certify report <12 hex digits>` (the file) or `Link certify report <12 hex digits>` (the `.issue` file). The end of the message does not change the count. A new report makes 2 commits. The issue for a file of an earlier day makes 1. The commit is the first public write. |
 
-The relay checks in this order: the off switch, the size by `Content-Length`, the two bindings,
-the body and the format, the duplicate lookup, the daily cap (only for a new report), then the
-writes. So each POST counts against the two bindings, also a refused POST and a duplicate.
+The relay checks in this order: the off switch, the type, the size by `Content-Length`, the
+per-sender binding, the burst binding, the body and the format, the issue text, the `.issue` file,
+the daily cap, then the writes. So each POST counts against the per-sender binding, also a refused
+POST and a duplicate. One sender over its limit does not use up the burst limit of all senders.
+Only a duplicate whose `.issue` file names its issue writes nothing, so only it needs no count.
+Each other path writes, so it checks the daily cap first. That includes the issue for a file that
+an earlier request committed with no issue.
 
 - The earlier figure of 5 reports per hour for each sender cannot be set: a binding period is 10
   or 60 seconds only.
 - Each binding counts in each Cloudflare location separately, and its count is approximate. One
   sender usually reaches one location. The worst case for one sender in one location is 120 POSTs
-  in one hour. The daily cap limits the new reports for all senders together to 200 in one day.
-- Issues from the issue form also have the label `certify-report`. They count toward the daily
-  cap.
+  in one hour. The daily cap limits the commits of the relay for all senders together to 400 in
+  one day.
+- Issues from the issue form do not count toward the daily cap. They make no commit on `inbox`.
+- The count reads at most 4 pages of 100 commits: 400 commits, the limit. When the 4 pages are
+  full and the count is below 400, the relay cannot know the count, so it answers `daily-cap` (it
+  fails closed). If GitHub fails during the count, the relay answers 503 and writes nothing.
 
 ## Files
 
 | Path | Content |
 |---|---|
 | `src/index.js` | The Worker entry point. |
-| `src/handler.js` | Routes, CORS, limits, status codes and the filing steps. |
+| `src/handler.js` | Routes, limits, status codes and the filing steps. |
 | `src/report.js` | Parse the file and check the format. |
-| `src/privacy.js` | Privacy rules 1 to 11. |
+| `src/privacy.js` | Privacy rules 1 to 11 and 17 to 20. |
 | `src/issue.js` | The issue title and body, and the neutralisation of report strings. |
 | `src/github.js` | The GitHub client: the token or the GitHub App, the REST calls and the daily count. |
 | `src/ratelimit.js` | The per-sender and burst limits (Rate Limiting bindings). |
@@ -541,23 +559,24 @@ documentation, read 2026-11-19):
 | Limit | Free plan | The relay |
 |---|---|---|
 | Requests | 100,000 per day | One for each send. |
-| CPU time | 10 ms per request | A normal report needs a few ms. The cap of 256 KiB keeps the parse short. |
+| CPU time | 10 ms per request | A normal report needs a few ms. The cap of 256 KiB keeps the parse short. Each privacy pattern costs linear time in the length of a string, and no pattern runs on a string longer than 2000 characters. |
 | Request body | 100 MB | The relay refuses more than 262,144 bytes. |
-| Subrequests | 50 per request | At most 16 GitHub calls. |
+| Subrequests | 50 per request | At most 18 GitHub calls. |
 | Rate Limiting bindings | Not on the limits page | 2 calls for each POST. They are not storage. |
 
 GitHub limits (GitHub documentation): 5,000 requests per hour for a token, and at most 80
 content-generating requests per minute and 500 per hour. Each new report makes 3 contents (two
-commits and one issue). The daily count costs 1 GitHub call, or 2 when 100 or more
-`certify-report` issues were created today. A duplicate or a refused file needs no count. The
-daily cap of 200 stays below these limits.
+commits and one issue). The daily count costs 1 GitHub call for each 100 commits on `inbox` today,
+at most 4. A refused file, and a duplicate whose `.issue` file names its issue, need no count. The
+daily cap of 400 commits stays below these limits.
 
 ---
 
 # Part 2: the GitHub App
 
 With an app, the issues and the commits come from the app (`<app name>[bot]`), not from your
-account. The app token lasts one hour and the relay makes a new one when it needs it. Do this part
+account. The app token lasts one hour and the relay makes a new one when it needs it. When GitHub
+refuses the token (401), the relay drops it, and the next request gets a new one. Do this part
 before volunteers use the relay.
 
 ## 1. Create the app
@@ -647,6 +666,23 @@ To stop the app later: on GitHub, open **Settings** > **Applications** > **Insta
 click **Configure** next to the app and click **Uninstall**. To change the key, generate a new key,
 set it with step 4 and delete the old key on the app page.
 
+## 7. Protect the branch main
+
+The app has **Contents: Read and write**. GitHub gives that permission for each branch, not only
+for `inbox`. A branch rule must stop the app on `main`.
+
+1. On GitHub, open the repository **Settings** > **Rules** > **Rulesets**.
+2. Click **New ruleset** > **New branch ruleset**.
+3. **Ruleset name**: `protect-main`. **Enforcement status**: **Active**.
+4. **Target branches**: click **Add target** > **Include default branch**.
+5. Select **Restrict updates**, **Restrict deletions** and **Block force pushes**.
+6. **Bypass list**: do not add the app. If you push to `main` directly, add the role
+   **Repository admin**.
+7. Click **Create**.
+
+Success: the ruleset list shows `protect-main` as **Active**, and its bypass list does not hold the
+app.
+
 ---
 
 # A custom domain later
@@ -674,7 +710,7 @@ The `workers.dev` address is enough. A custom domain needs a domain on your Clou
 | 503 `credential-rejected` | GitHub refused the token or the app: expired, revoked, wrong repository or a missing permission. | Rotate the token (step 19), or check the app permissions and installation. |
 | 503 `github-rate-limited` | GitHub limits the token or the app. | Wait for `Retry-After`. Check for a flood of sends. |
 | 503 `github-unavailable` | GitHub failed, or two different reports wrote to `inbox` at the same time. | Retry later. Check `https://www.githubstatus.com`. |
-| 503 `daily-cap` | 200 `certify-report` issues created today (UTC). | Wait until 00:00 UTC. Check the issues for a flood. |
+| 503 `daily-cap` | 400 relay commits on `inbox` today (UTC). | Wait until 00:00 UTC. Check the issues for a flood. |
 | 503 `relay-off` | `RELAY_ENABLED` is not `"true"`. | Set it to `"true"` and deploy. |
 | 429 `rate-limited` | More than 2 POSTs from one address in 60 seconds. | Wait for `Retry-After`. |
 | 429 `busy` | More than 10 POSTs from all senders in 60 seconds. | Wait for `Retry-After`. Check for a flood. |
@@ -692,11 +728,19 @@ The `workers.dev` address is enough. A custom domain needs a domain on your Clou
   (Cloudflare documentation). A sender that reaches more than one location gets more POSTs. A
   burst can pass a few more POSTs than the limit before the counts agree.
 - The worst case for one sender in one location is 2 POSTs in each 60 seconds: 120 in one hour.
-  The daily cap limits all new reports together to 200 in one UTC day.
-- The daily cap counts issues on GitHub. Two new reports at the same moment can both pass at 199.
-  An issue from the issue form counts too. A `certify-report` issue that somebody deletes stops
-  counting.
+  The daily cap limits all commits of the relay together to 400 in one UTC day.
+- The daily cap counts the commits of the relay on `inbox`. Requests at the same moment can pass the cap
+  by the number of requests in flight. A rewrite of the branch `inbox`, for example after the
+  removal of a file, changes the count.
+- The relay is open: a sender needs no sign-in. A sender with many addresses can flood it. The
+  worst case is the daily cap of junk files, and then the relay is closed for all senders until
+  00:00 UTC. The answer of the operator is the off switch
+  ([step 17](#17-test-the-off-switch)) and the [kill steps](#21-kill-steps).
 - Two identical sends at the same moment can make two issues. A retry after the first answer
   never does.
-- The relay looks for a lost issue by its marker in the 100 newest issues. An issue older than that
-  with no `.issue` file gets a second issue.
+- The relay looks for a lost issue by its marker in the 100 newest issues with the label
+  `certify-report`. It takes only an issue that its own app wrote, because anybody can write the
+  marker in an issue. An issue older than that with no `.issue` file gets a second issue. With the
+  token of Part 1, the relay has no app, so a lost issue always gets a second issue.
+- The token of the app can write to each branch, not only to `inbox`. So the owner must add a
+  branch rule on `main` that the app cannot bypass ([Part 2 step 7](#7-protect-the-branch-main)).

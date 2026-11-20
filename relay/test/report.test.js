@@ -1,13 +1,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { parseReport, splitReport } from '../src/report.js';
-import { sample, validData, reportFile } from './helpers.js';
+import { sample, validData, reportFile, NOW } from './helpers.js';
 
+const parse = (text, now = NOW) => parseReport(text, now);
 const refused = (text, code, detail) =>
-  assert.throws(() => parseReport(text), (e) => e.code === code && (detail === undefined || e.detail === detail));
+  assert.throws(() => parse(text), (e) => e.code === code && (detail === undefined || e.detail === detail));
 
 test('the valid sample parses', () => {
-  const { markdown, data } = parseReport(sample('valid.md'));
+  const { markdown, data } = parse(sample('valid.md'));
   assert.equal(data.modules[0].package.name, 'skellytracker');
   assert.equal(markdown[0], '# Certify report');
 });
@@ -54,7 +55,7 @@ test('schema: major version 1 only', () => {
   const d = validData();
   d.schema = 'skellycertify.report/1.7.3';
   d.modules[0].schema = 'skellycertify.report/1.2.0';
-  assert.ok(parseReport(reportFile(d)));
+  assert.ok(parse(reportFile(d)));
 });
 
 test('each required field of section 4.1 is checked', () => {
@@ -68,7 +69,7 @@ test('each required field of section 4.1 is checked', () => {
   refused(reportFile(d), 'bad-value', 'report.modules');
   const n = validData();
   n.app = null;
-  assert.ok(parseReport(reportFile(n)), 'app null is a report of one package');
+  assert.ok(parse(reportFile(n)), 'app null is a report of one package');
   const a = validData();
   delete a.app.version;
   refused(reportFile(a), 'missing-field', 'report.app.version');
@@ -108,7 +109,7 @@ test('a check needs no section when the module has no sections', () => {
   const d = validData();
   delete d.modules[0].sections;
   d.modules[0].checks.forEach((c) => delete c.section);
-  assert.ok(parseReport(reportFile(d)));
+  assert.ok(parse(reportFile(d)));
 });
 
 test('summary: optional; when present at most 200 items of the form of section 3.7', () => {
@@ -121,7 +122,7 @@ test('summary: optional; when present at most 200 items of the form of section 3
   for (const change of ok) {
     const d = validData();
     change(d.modules[0]);
-    assert.ok(parseReport(reportFile(d)));
+    assert.ok(parse(reportFile(d)));
   }
   const W = 'report.modules[0].summary';
   const bad = [
@@ -159,7 +160,7 @@ test('summary 1.3.0: partial, skipped with a reason, and benchmark items', () =>
   for (const change of ok) {
     const d = validData();
     change(d.modules[0]);
-    assert.ok(parseReport(reportFile(d)));
+    assert.ok(parse(reportFile(d)));
   }
   const W = 'report.modules[0].summary';
   const bad = [
@@ -185,6 +186,28 @@ test('summary 1.3.0: partial, skipped with a reason, and benchmark items', () =>
   }
 });
 
+test('gate 1.4.0: optional on an ep, gpu-jpeg or camera item; a check name of 3.4', () => {
+  const camera = { group: 'camera', name: 'Logitech C922', device: '046d:085c', result: 'partial' };
+  const ok = [
+    (m) => { m.summary[0].gate = 'cuda@10de-2484-0'; },
+    (m) => { m.summary[2].gate = 'g'.repeat(128); m.summary[2].result = 'partial'; },
+    (m) => { m.summary.push({ ...camera, gate: '046d-085c:gate' }); },
+    (m) => { m.summary.push({ ...camera, result: 'skipped', reason: 'busy', gate: '046d-085c:gate' }); },
+    (m) => { m.summary[4].gate = null; }, // a benchmark item has no gate: a reader ignores it
+  ];
+  for (const change of ok) {
+    const d = validData();
+    change(d.modules[0]);
+    assert.ok(parse(reportFile(d)));
+  }
+  const W = 'report.modules[0].summary';
+  for (const gate of [null, '', 7, ['a'], 'a gate', '-gate', 'g'.repeat(129), 'gate<x>']) {
+    const d = validData();
+    d.modules[0].summary.push({ ...camera, gate });
+    refused(reportFile(d), 'bad-value', `${W}[${d.modules[0].summary.length - 1}].gate`);
+  }
+});
+
 test('module: optional on a check and a section; when present a string of at most 80 characters', () => {
   const ok = [
     (m) => { m.checks[0].module = 'm'.repeat(80); },
@@ -193,7 +216,7 @@ test('module: optional on a check and a section; when present a string of at mos
   for (const change of ok) {
     const d = validData();
     change(d.modules[0]);
-    assert.ok(parseReport(reportFile(d)));
+    assert.ok(parse(reportFile(d)));
   }
   const bad = [
     [(m) => { m.checks[0].module = 'm'.repeat(81); }, 'report.modules[0].checks[0].module'],
@@ -217,7 +240,7 @@ test('notices 1.4.0: optional; at most 50 items of a code and at most 8 short va
   for (const change of ok) {
     const d = validData();
     change(d.modules[0]);
-    assert.ok(parseReport(reportFile(d)));
+    assert.ok(parse(reportFile(d)));
   }
   const W = 'report.modules[0].notices';
   const bad = [
@@ -246,14 +269,75 @@ test('id: optional; when present a version 4 UUID in lower case; a repeat is all
   const ID = '3f2b8c1e-9a4d-4e7b-b6a1-0c5d2e8f7a90';
   const d = validData();
   d.modules[0].id = ID;
-  assert.ok(parseReport(reportFile(d)));
+  assert.ok(parse(reportFile(d)));
   for (const id of [ID.toUpperCase(), ID.replace(/-/g, ''), '3f2b8c1e-9a4d-1e7b-b6a1-0c5d2e8f7a90', 42, '', null]) {
     const e = validData();
     e.modules[0].id = id;
     refused(reportFile(e), 'bad-value', 'report.modules[0].id');
   }
-  assert.ok(parseReport(reportFile(validData())), 'no id');
+  assert.ok(parse(reportFile(validData())), 'no id');
   const two = validData();
   two.modules = [{ ...two.modules[0], id: ID }, { ...two.modules[0], id: ID }];
-  assert.ok(parseReport(reportFile(two)), 'the same id twice');
+  assert.ok(parse(reportFile(two)), 'the same id twice');
+});
+
+test('host: each known field of section 3.3 has its form; another form is refused', () => {
+  const ok = [
+    (h) => { delete h.os; delete h.cpu; delete h.gpus; delete h.memory_bytes; },
+    (h) => { h.gpus = Array.from({ length: 16 }, (_, i) => ({ name: 'n'.repeat(200), id: `${i}`.padEnd(40, 'x') })); },
+    (h) => { h.os.build = '26300'; h.os.release = 11; h.extra = { any: [1] }; }, // a reader ignores a field that it does not know
+    (h) => { h.gpus[0].vram_bytes = 0; delete h.gpus[0].vendor; delete h.gpus[0].driver_version; },
+    (h) => { // a writer writes null for an unknown field (3.3)
+      for (const f of Object.keys(h.os)) h.os[f] = null;
+      h.cpu.name = null; h.memory_bytes = null;
+      Object.assign(h.gpus[0], { vendor: null, driver_version: null, vram_bytes: null });
+    },
+    (h) => { h.os = null; h.cpu = null; h.gpus = null; },
+  ];
+  for (const change of ok) {
+    const d = validData();
+    change(d.modules[0].host);
+    assert.ok(parse(reportFile(d)));
+  }
+  const W = 'report.modules[0].host';
+  const bad = [
+    [(h) => { h.os = 'Windows'; }, 'bad-value', `${W}.os`],
+    [(h) => { h.os.label = { a: 1 }; }, 'bad-value', `${W}.os.label`],
+    [(h) => { h.os.build = [26300]; }, 'bad-value', `${W}.os.build`],
+    [(h) => { h.cpu = ['AMD']; }, 'bad-value', `${W}.cpu`],
+    [(h) => { h.cpu.name = true; }, 'bad-value', `${W}.cpu.name`],
+    [(h) => { h.memory_bytes = -1; }, 'bad-value', `${W}.memory_bytes`],
+    [(h) => { h.memory_bytes = '32 GB'; }, 'bad-value', `${W}.memory_bytes`],
+    [(h) => { h.gpus = {}; }, 'bad-value', `${W}.gpus`],
+    [(h) => { h.gpus = Array.from({ length: 17 }, () => h.gpus[0]); }, 'bad-value', `${W}.gpus`],
+    [(h) => { h.gpus[1] = null; }, 'bad-value', `${W}.gpus[1]`],
+    [(h) => { delete h.gpus[0].name; }, 'missing-field', `${W}.gpus[0].name`],
+    [(h) => { h.gpus[0].name = 'n'.repeat(201); }, 'bad-value', `${W}.gpus[0].name`],
+    [(h) => { h.gpus[0].name = { toString: 1 }; }, 'bad-value', `${W}.gpus[0].name`],
+    [(h) => { h.gpus[0].name = null; }, 'bad-value', `${W}.gpus[0].name`],
+    [(h) => { h.gpus[0].id = null; }, 'bad-value', `${W}.gpus[0].id`],
+    [(h) => { delete h.gpus[0].id; }, 'missing-field', `${W}.gpus[0].id`],
+    [(h) => { h.gpus[0].id = 'i'.repeat(41); }, 'bad-value', `${W}.gpus[0].id`],
+    [(h) => { h.gpus[0].vendor = 1; }, 'bad-value', `${W}.gpus[0].vendor`],
+    [(h) => { h.gpus[0].driver_version = 610.88; }, 'bad-value', `${W}.gpus[0].driver_version`],
+    [(h) => { h.gpus[0].vram_bytes = -2; }, 'bad-value', `${W}.gpus[0].vram_bytes`],
+  ];
+  for (const [change, code, detail] of bad) {
+    const d = validData();
+    change(d.modules[0].host);
+    refused(reportFile(d), code, detail);
+  }
+});
+
+test('created_utc: the year must be the current UTC year, the year before or the year after', () => {
+  const text = reportFile(validData()); // 2026
+  for (const now of ['2025-01-01T00:00:00Z', '2026-06-01T00:00:00Z', '2027-12-31T23:59:59Z']) {
+    assert.ok(parse(text, Date.parse(now)), now);
+  }
+  for (const now of ['2024-12-31T23:59:59Z', '2028-01-01T00:00:00Z']) {
+    assert.throws(() => parse(text, Date.parse(now)), (e) => e.code === 'bad-value' && e.detail === 'report.modules[0].created_utc', now);
+  }
+  const d = validData();
+  d.modules.push({ ...validData().modules[0], created_utc: '1999-01-01T00:00:00Z' });
+  refused(reportFile(d), 'bad-value', 'report.modules[1].created_utc');
 });

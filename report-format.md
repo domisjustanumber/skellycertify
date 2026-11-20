@@ -307,7 +307,7 @@ outside the data of each package.
 | `id` | string | no | A version 4 UUID in the lower-case form with hyphens (36 characters), for example `3f2b8c1e-9a4d-4e7b-b6a1-0c5d2e8f7a90`. The package gives it when it saves the report. It is unique in a report file. It holds no time and no data of the system. A version 1 UUID is forbidden, because it holds the MAC address. A report that was not saved can have no `id`. |
 | `package` | object | yes | See [3.2](#32-package). |
 | `kind` | string | yes | `quick`, `full` or `passive` ([7.2](#72-kinds-of-evidence)). `passive` is reserved for a record that the package gathers from normal use ([7.3](#73-the-passive-record-reserved)). Its fields are not yet defined. A writer must not write `passive` in this version. |
-| `created_utc` | string | yes | The start of the run, `YYYY-MM-DDTHH:MM:SSZ`. |
+| `created_utc` | string | yes | The start of the run, `YYYY-MM-DDTHH:MM:SSZ`. The relay accepts only the current UTC year, the year before and the year after. |
 | `host` | object | yes | Hardware and software facts. See [3.3](#33-host). |
 | `checks` | list | yes | Each check of the run. See [3.4](#34-check). |
 | `sections` | list | no | The sections of the run. See [3.5](#35-section). |
@@ -332,7 +332,8 @@ A reader must ignore a field that it does not know.
 ### 3.3 `host`
 
 These keys have a fixed meaning. A package writes the keys that it can find. It can add more keys
-under `details`.
+under `details`. When a writer does not know the value of a field, it leaves the field out or
+writes `null`. This does not apply to `name` and `id` of a GPU.
 
 | Field | Meaning |
 |---|---|
@@ -343,6 +344,16 @@ under `details`.
 | `cpu.name` | The model name of the CPU. |
 | `memory_bytes` | The total memory in bytes. |
 | `gpus` | A list. Each item has `vendor`, `name`, `id` (the PCI vendor id and device id in lower-case hex, for example `10de:2484`), `driver_version` and `vram_bytes`. |
+
+The fields have these forms. The relay refuses another form.
+
+- `os` and `cpu` are objects or `null`. Each field of the table above in them is a string, a
+  number or `null`.
+- `memory_bytes` and `vram_bytes` are numbers of 0 or more, or `null`.
+- `gpus` is a list or `null`. It has at most 16 items. Each item is an object. `name` (at most 200
+  characters) and `id` (at most 40 characters) are strings, and each item must have them. `vendor`
+  and `driver_version` are strings or `null`.
+- A reader shows nothing for a `null` value.
 
 ### 3.4 Check
 
@@ -565,6 +576,7 @@ person ([4.2](#42-layout)). It is not the `summary` of a section ([3.5](#35-sect
 | `device` | For `ep`, `gpu-jpeg` and `benchmark`: the `id` of the GPU in `host.gpus`. For a PCI device this is `vvvv:dddd`. For `camera`: the USB id `vvvv:pppp`. Else `null`. |
 | `result` | Not for `benchmark`. `pass`, `fail`, `record-only`, `partial` or `skipped`. |
 | `reason` | Not for `benchmark`. For `skipped`: `busy` or `reviewed`. For each other result: absent or `null`. |
+| `gate` | Optional. Only for `ep`, `gpu-jpeg` and `camera`. The `name` of one roll-up check ([3.4](#34-check)) of the same module report, for example `046d-085c:gate` for a camera. It matches the pattern of a check name. The relay refuses another form. The package names it. [7.2](#72-kinds-of-evidence) tells what it gives ([ADR-T191](decisions/entries/T191-gate-of-a-summary-item.md)). |
 | `stage` | Only for `benchmark`. A short fixed name of the package for the measured stage. At most 80 characters. |
 | `ms_per_frame`, `fps` | Only for `benchmark`. Two numbers, each 0 or more: the time for one frame in milliseconds, and the frames for each second. |
 
@@ -578,6 +590,9 @@ The results of an item:
 
 A `benchmark` item has no `result` and no `reason`. The details of the measurement stay in
 `checks`.
+
+A `gate` does not change the result of its item. An item with the result `partial` stays
+`partial` in the summary, also when its `gate` check is `pass`.
 
 - The package that ran the checks fills `summary`. skellytracker gives the `ep` and `gpu-jpeg`
   items ([3.6](#36-example-skellytracker)). skellycam gives the `camera` items. Each package that
@@ -625,7 +640,7 @@ One report file holds one JSON object:
 | `schema` | `skellycertify.report/1.4.0`. |
 | `app` | `name`, `version` (SemVer) and `commit` of the app, or `null` for a report of one package that ran alone. |
 | `modules` | A list of module reports. The list holds at least one module report. A package can give more than one module report, for example one for each run. Each module report is independent ([7.1](#71-validity)). |
-| `note` | The one free-text note of the person, or `null`. At most 2000 characters. |
+| `note` | The one free-text note of the person, or `null`. At most 2000 characters. It must be a clean note (rule 18 of [section 6](#6-privacy-rules)). |
 
 The app calls `certify()` of each package and puts each result in `modules`.
 An app can put more than one report of one package in one file, for example each report not yet
@@ -655,6 +670,10 @@ So:
   app must get a clear "send" from the person.
 - The app must keep the file that the person accepted. An automatic retry must send only that
   file, byte for byte. It must never send data that the app added later.
+- Before the app shows the file to the person, the app must make the note clean (rule 18 of
+  [section 6](#6-privacy-rules)). The person then sees the exact note that the app sends.
+- The app must send the file with the content type `text/markdown`, with no `charset` parameter or
+  with `charset=utf-8`. The relay refuses each other type, also `text/plain`.
 
 ### 4.2 Layout
 
@@ -933,6 +952,36 @@ These rules apply to the writer. A test of the writer can check them. A reviewer
     For example, `<name>'s iPhone Camera` becomes `iPhone Camera`. The relay cannot find a first
     name, so this rule is a duty of the writer.
 
+The writer must also make these statements true. The relay checks them, and the reviewer checks
+them again:
+
+17. No line of the Markdown part (each line before the heading `## Data`) holds `<`, `](`, `]:`,
+    `://` or `www.` (`www.` in upper case, lower case or a mix). The layout of [4.2](#42-layout) needs
+    none of them. The Markdown part shows a value that holds `<private>` or `<path>` (rule 12)
+    without `<` and `>`, for example `private`.
+18. `note` is `null` or a clean note. A clean note obeys each of these statements:
+    - It has at most 2000 characters.
+    - It holds only letters, marks and digits (the Unicode categories L, M and N), the space
+      (U+0020), the line feed and these characters: `.` `,` `:` `;` `_` `+` `=` `(` `)` `'` `%` `/`
+      `?` `·` `-`. This is the set of characters that the relay keeps in the issue. So the note
+      holds no control character other than the line feed.
+    - It holds no `://` and no `www.` (`www.` in upper case, lower case or a mix).
+
+    Before the app shows the file to the person, the app makes the note clean. It replaces each
+    character that the list above does not allow with a space. Then it removes each `://` and each
+    `www.`, again until none is left. The relay does not change a note. It refuses a report whose
+    note is not clean.
+19. No object of the JSON object has the same key two times. A JSON parser keeps only one of the
+    two values, so the other rules cannot check the other value.
+20. No line of the Markdown part and no line of `note` holds an IPv4 address,
+    `\b(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.){3}(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\b`. This rule
+    does not apply to the other values of the JSON object, because a driver or package version can
+    have four numeric parts, for example `32.0.101.6881`.
+
+**Limit of these rules.** The rules stop accidents. They cannot stop a sender who wants to publish
+personal data of a person: a name, a phone number or a street address passes the rules. The
+reviewer and a fast removal of the file are the defence ([review.md](review.md) section 3).
+
 Allowed facts: model names of a CPU, a GPU or a camera, PCI vendor and device ids, USB vendor and
 product ids, driver and package versions, the OS label, and test results. These facts identify a
 model, not one unit.
@@ -979,8 +1028,12 @@ A valid module report gives evidence by its `kind`:
 - A row from a `passive` record never replaces a row that a package requires from a maintainer.
   For example, skellytracker requires maintainer rows for an NVIDIA version bump.
 - A freemocap module of kind `full` is a record only until the level `full` of freemocap is built.
-- A summary item with the result `partial` or `skipped` never gives a reviewed row. The reviewer
-  treats it as a record.
+- A summary item with the result `skipped` never gives a reviewed row, with or without a `gate`.
+  A summary item with the result `partial` gives a reviewed row only when it has a `gate`
+  ([3.7](#37-summary)) and its `gate` check has the result `pass`. A `partial` item with no `gate`
+  gives no reviewed row. The reviewer treats an item that gives no row as a record. The evidence
+  row of a `partial` item keeps each check of the item that did not pass. The package that owns
+  the row defines the form of the row ([ADR-T191](decisions/entries/T191-gate-of-a-summary-item.md)).
 - The package that owns an evidence row gives its other rules for each kind. The reviewer reads
   those rules in the package.
 
@@ -1026,7 +1079,15 @@ Changes of the format:
   ([5.3](#53-common-reason-codes)). The table `Checks that did not pass:` with the column `Result`
   replaces the table of the failed checks ([4.2](#42-layout)). A reader of major version 1 still
   accepts a file of 1.3.0 or earlier
-  ([ADR-V1TR](decisions/entries/V1TR-format-1-4-0.md)).
+  ([ADR-V1TR](decisions/entries/V1TR-format-1-4-0.md)). The privacy rules 17 to 20 are new: no
+  `<`, `](`, `]:`, `://` or `www.` in the Markdown part, a clean note, no key two times in one object,
+  and no IPv4 address in the Markdown part or the note ([section 6](#6-privacy-rules)). The relay
+  also checks the forms of `host` ([3.3](#33-host)), and it applies these checks to a file of each
+  version. The schema id stays 1.4.0, because no writer shipped 1.4.0 yet
+  ([ADR-MM1F](decisions/entries/MM1F-relay-hardened-after-security-review.md)). A summary item of
+  the groups `ep`, `gpu-jpeg` and `camera` can have the optional field `gate`, and a `partial` item
+  whose `gate` check is `pass` can give a reviewed row ([3.7](#37-summary),
+  [7.2](#72-kinds-of-evidence), [ADR-T191](decisions/entries/T191-gate-of-a-summary-item.md)).
 - 1.3.0: A summary item can have the results `partial` and `skipped`, and a `skipped` item has the
   field `reason` (`busy` or `reviewed`). The new group `benchmark` gives the benchmark table. A
   check and a section can have the optional field `module`, and the table of the failed checks has

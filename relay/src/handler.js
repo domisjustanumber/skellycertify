@@ -1,4 +1,5 @@
-// The request handler: POST /reports, GET /health, CORS. It stores nothing of its own.
+// The request handler: POST /reports and GET /health. It stores nothing of its own.
+// It sends no CORS header: a web page in a browser cannot send to the relay or read its answer.
 
 import { parseReport, Refused, SCHEMA_MAJOR } from './report.js';
 import { privacyRule } from './privacy.js';
@@ -8,20 +9,21 @@ import { checkBurst, secondsToMidnight, senderKey, PER_DAY } from './ratelimit.j
 
 export const MAX_BYTES = 262_144; // 256 KiB
 export const BRANCH = 'inbox';
-const TYPES = ['text/markdown', 'text/plain'];
-
-const CORS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
-  'Access-Control-Expose-Headers': 'Retry-After',
-  'Access-Control-Max-Age': '86400',
-};
+const LABEL = 'certify-report';
+// The start of the two fixed commit messages of the relay: the report commit and the link commit.
+// Only the start is matched, so a line feed or a trailer at the end does not change the count.
+const RELAY_COMMIT_RE = /^(?:Add|Link) certify report [0-9a-f]{12}\b/;
+// The daily cap counts both kinds: a new report makes 2 commits, and the issue for a file of an
+// earlier day makes 1 (its link commit). So the limit is 2 * PER_DAY commits.
+const CAP_COMMITS = 2 * PER_DAY;
+// Each commit of the relay matches, so CAP_COMMITS commits fill at most CAP_COMMITS / 100 pages:
+// 400 / 100 = 4 pages. A page of other commits makes the count unknown, and the relay refuses.
+const CAP_PAGES = Math.ceil(CAP_COMMITS / 100);
 
 function json(status, body, extra = {}) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...CORS, ...extra },
+    headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...extra },
   });
 }
 
@@ -64,7 +66,7 @@ const hex = (buf) => [...new Uint8Array(buf)].map((b) => b.toString(16).padStart
 
 function typeOk(header) {
   const [type, ...params] = String(header || '').toLowerCase().split(';').map((s) => s.trim());
-  if (!TYPES.includes(type)) return false;
+  if (type !== 'text/markdown') return false;
   const charset = params.find((p) => p.startsWith('charset='));
   return !charset || charset.replace(/"/g, '') === 'charset=utf-8';
 }
@@ -94,18 +96,29 @@ async function file(report, bytes, hash, env, deps) {
     `Link certify report ${short} to issue #${issue.number}`).catch(() => null); // a retry finds the issue by its marker
   const answer = (issue, duplicate) => ({ issue_url: issue.html_url, issue_number: issue.number, file_path: filePath, duplicate });
 
+  // Build the issue text before the first write, so that an error here leaves nothing on GitHub.
+  // The commit is not known yet: the link holds a placeholder of the same length. Report strings
+  // cannot hold "://" (neutral() breaks it), so the placeholder occurs only in the link.
+  const draftUrl = `https://github.com/${gh.owner}/${gh.repo}/blob/${'0'.repeat(40)}/${filePath}`;
+  const title = buildTitle(report.data);
+  const body = buildBody({ data: report.data, hash, filePath, fileUrl: draftUrl, testMode });
+  const labels = testMode ? [LABEL, 'relay-test'] : [LABEL];
+
   // Duplicate: the sidecar file names the issue. A read on a missing branch gives 404.
   const linked = await issueFromSidecar(gh, issuePath);
   if (linked) return answer(linked, true);
 
+  // Each path below writes, so each one checks the daily cap first. It counts the commits of the
+  // relay today (UTC): the commit is the first public write. Requests at the same moment can
+  // pass the cap by the number of requests in flight.
+  const today = Math.floor(deps.now() / 86_400_000) * 86_400_000;
+  if ((await gh.countCommitsSince(BRANCH, today, RELAY_COMMIT_RE, CAP_COMMITS, CAP_PAGES)) >= CAP_COMMITS) {
+    throw new Limited('daily-cap', secondsToMidnight(deps.now()));
+  }
+
   let commit = null;
   let duplicate = await gh.exists(filePath, BRANCH);
   if (!duplicate) {
-    // The daily cap counts only new reports. Two requests at the same moment can both pass at 199.
-    const today = Math.floor(deps.now() / 86_400_000) * 86_400_000;
-    if ((await gh.countIssuesSince('certify-report', today, PER_DAY)) >= PER_DAY) {
-      throw new Limited('daily-cap', secondsToMidnight(deps.now()));
-    }
     await gh.ensureBranch(BRANCH);
     commit = await gh.createFile(filePath, BRANCH, bytes, `Add certify report ${short}`);
     if (!commit) {
@@ -117,7 +130,7 @@ async function file(report, bytes, hash, env, deps) {
   if (duplicate) {
     // The file exists but no sidecar names an issue: the issue exists with no sidecar, or the
     // issue was never made (a half-done earlier request). Find it by the marker, else make it.
-    const found = await gh.findIssue(marker(hash));
+    const found = await gh.findIssue(marker(hash), LABEL);
     if (found) {
       await linkIssue(found);
       return answer(found, true);
@@ -125,9 +138,7 @@ async function file(report, bytes, hash, env, deps) {
     commit = await gh.lastCommit(filePath, BRANCH);
   }
   const fileUrl = `https://github.com/${gh.owner}/${gh.repo}/blob/${commit}/${filePath}`;
-  const labels = testMode ? ['certify-report', 'relay-test'] : ['certify-report'];
-  const issue = await gh.createIssue(buildTitle(report.data),
-    buildBody({ data: report.data, hash, filePath, fileUrl, testMode }), labels);
+  const issue = await gh.createIssue(title, body.replace(draftUrl, () => fileUrl), labels);
   await linkIssue(issue);
   return answer(issue, duplicate);
 }
@@ -141,7 +152,7 @@ async function postReport(request, env, deps) {
     return [fail(503, 'relay-misconfigured', 'the relay has no valid configuration'), 'relay-misconfigured'];
   }
   if (!typeOk(request.headers.get('content-type'))) {
-    return [fail(415, 'wrong-type', 'send text/markdown or text/plain in UTF-8'), 'wrong-type'];
+    return [fail(415, 'wrong-type', 'send text/markdown in UTF-8'), 'wrong-type'];
   }
   const length = Number(request.headers.get('content-length'));
   if (length > MAX_BYTES) return [fail(413, 'too-large', `the limit is ${MAX_BYTES} bytes`), 'too-large'];
@@ -174,8 +185,8 @@ async function postReport(request, env, deps) {
     bytes = new TextEncoder().encode(text);
     hash = hex(await crypto.subtle.digest('SHA-256', bytes));
     meta = [bytes.length, hash];
-    report = parseReport(text);
-    const rule = privacyRule(report.markdown, report.data);
+    report = parseReport(text, deps.now());
+    const rule = privacyRule(report.markdown, report.data, report.json);
     if (rule) throw new Refused('privacy-rule', rule);
   } catch (e) {
     if (e instanceof Refused) return [fail(422, e.code, e.detail), e.code, ...meta];
@@ -208,9 +219,7 @@ export async function handle(request, env, deps = {}) {
   let bytes = null;
   let hash = null;
   try {
-    if (request.method === 'OPTIONS') {
-      [response, outcome] = [new Response(null, { status: 204, headers: CORS }), 'preflight'];
-    } else if (request.method === 'GET' && pathname === '/health') {
+    if (request.method === 'GET' && pathname === '/health') {
       response = json(200, { enabled: env.RELAY_ENABLED === 'true', test_mode: env.TEST_MODE === 'true', schema_major: SCHEMA_MAJOR });
       outcome = 'health';
     } else if (request.method === 'POST' && pathname === '/reports') {

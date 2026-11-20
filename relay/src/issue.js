@@ -1,7 +1,7 @@
 // Build the issue title and body from the facts of a report. Each function is pure.
 // Each report string is untrusted. neutral() keeps only letters, digits, marks, spaces and a few
 // signs: no "@" (mention), no "#" (issue link), no "<" or ">" (HTML), no "[", "]", "!", "|", "`", "*".
-// It breaks "://" and "www." so that GitHub makes no link.
+// It breaks "://", "www." and "GH-<digit>" so that GitHub makes no link and no issue reference.
 // The body shows the summary of report-format.md 4.2, built from the JSON and never from the Markdown.
 
 export const BODY_LIMIT = 65536; // characters of an issue body on GitHub
@@ -11,10 +11,18 @@ const MODULE_LINES = 100;
 const REASONS = 10; // reason codes shown for one module
 const CUT_ROOM = 120; // room for one "shortened" line
 
+// The characters that neutral() keeps, as a regex class body. The clean-note rule (privacy rule 18)
+// allows the same set and the line feed. Keep the list in report-format.md section 6 the same.
+export const KEPT = "\\p{L}\\p{M}\\p{N} .,:;_+=()'%/?·-";
+const DROP_RE = new RegExp(`[^${KEPT}]+`, 'gu');
+
+// Only a string or a finite number is text. Each other JSON value (object, list, boolean, null) is empty.
+const text = (v) => (typeof v === 'string' ? v : Number.isFinite(v) ? String(v) : '');
+
 export function neutral(value, max = 120) {
-  let s = String(value ?? '').normalize('NFKC');
-  s = s.replace(/[^\p{L}\p{M}\p{N} .,:;_+=()'%/?·-]+/gu, ' ');
-  s = s.replace(/:\/\//g, ': //').replace(/\bwww\./gi, 'www .');
+  let s = text(value).normalize('NFKC');
+  s = s.replace(DROP_RE, ' ');
+  s = s.replace(/:\/\//g, ': //').replace(/(www)\./gi, '$1 .').replace(/(gh-)(?=\d)/gi, '$1 ');
   s = s.replace(/\s+/g, ' ').trim();
   const chars = [...s];
   return chars.length > max ? `${chars.slice(0, max - 1).join('').trimEnd()}…` : s;
@@ -30,12 +38,12 @@ const str = (v) => typeof v === 'string';
 const tidy = (s) => s.replace(/\s+/g, ' ').trim();
 
 // Display names of report-format.md 4.2. The JSON keeps each name as the OS or the driver gives it.
-export const gpuName = (s) => tidy(String(s ?? '').replace(/\((?:R|TM)\)/g, ' ').replace(/\b(?:GeForce|Radeon|Arc|Graphics|GPU|Series)\b/g, ' '));
-export const cpuName = (s) => tidy(String(s ?? '').replace(/\((?:R|TM)\)/g, ' ')
+export const gpuName = (s) => tidy(text(s).replace(/\((?:R|TM)\)/g, ' ').replace(/\b(?:GeForce|Radeon|Arc|Graphics|GPU|Series)\b/g, ' '));
+export const cpuName = (s) => tidy(text(s).replace(/\((?:R|TM)\)/g, ' ')
   .replace(/\b\d+(?:st|nd|rd|th) Gen\b/g, ' ')
   .replace(/(?:\bCPU\s*)?@\s*\d+(?:\.\d+)?\s*[GM]Hz\b/g, ' ')
   .replace(/\b\w+-Core Processor\b/g, ' '));
-export const osLabel = (s) => tidy(String(s ?? '').replace(/\b(?:Home|Pro)\b/g, ' '));
+export const osLabel = (s) => tidy(text(s).replace(/\b(?:Home|Pro)\b/g, ' '));
 export const gigabytes = (bytes) => `${Math.round(bytes / 2 ** 30)} GB`;
 
 const gpusOf = (m) => (Array.isArray(m.host?.gpus) ? m.host.gpus.filter((g) => g !== null && typeof g === 'object') : []);
@@ -43,7 +51,7 @@ const osOf = (m) => (str(m.host?.os?.label) ? osLabel(m.host.os.label) : str(m.h
 
 // A check name of the format (3.4) holds no backtick, bar or space, so it is safe in a code span as it is.
 // It keeps its "@", which neutral() removes. Another name, for example of a section, goes through neutral().
-const testName = (v) => (/^[A-Za-z0-9_.:@-]{1,128}$/.test(String(v)) ? `\`${v}\`` : code(v, 128));
+const testName = (v) => (/^[A-Za-z0-9_.:@-]{1,128}$/.test(text(v)) ? `\`${v}\`` : code(v, 128));
 
 export function buildTitle(data) {
   const first = data.modules[0];
@@ -96,7 +104,7 @@ const itemsOf = (m) => (Array.isArray(m.summary) ? m.summary : []);
 
 function gpuCell(g) {
   const vram = Number.isFinite(g.vram_bytes) && g.vram_bytes >= 2 ** 30 ? ` ${gigabytes(g.vram_bytes)}` : '';
-  return code(`${gpuName(g.name) || g.id}${vram}`, 100);
+  return code(`${gpuName(g.name) || text(g.id)}${vram}`, 100);
 }
 
 // The GPU cell of an item: the GPU of the same module report whose id is device, or "-" for null.
@@ -166,6 +174,7 @@ function notPassedRows(data) {
   return rows;
 }
 
+// Each note line is a code span in the quote, so no line can become a heading, a list or a rule.
 function quote(note) {
   const lines = String(note).slice(0, NOTE_LIMIT * 2).split('\n');
   const kept = [];
@@ -174,7 +183,7 @@ function quote(note) {
     const s = neutral(line, NOTE_LIMIT);
     if (used + s.length > NOTE_LIMIT) break;
     used += s.length;
-    kept.push(`> ${s}`);
+    kept.push(s ? `> \`${s}\`` : '>');
   }
   return kept.join('\n');
 }

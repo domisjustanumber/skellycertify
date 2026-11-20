@@ -58,6 +58,32 @@ const str = (v) => typeof v === 'string';
 const strOrNull = (v) => v === null || typeof v === 'string';
 const short = (v) => str(v) && [...v].length <= 80;
 const figure = (v) => Number.isFinite(v) && v >= 0;
+const upTo = (n) => (v) => str(v) && [...v].length <= n;
+const strOrNum = (v) => str(v) || Number.isFinite(v);
+const orNull = (test) => (v) => v === null || test(v);
+const GPUS = 16; // a limit of the relay, so that the issue stays small
+const OS_FIELDS = ['name', 'release', 'version', 'build', 'label', 'arch'];
+
+// Section 3.3. Each known field has its form, so that the issue prints only text. Each optional
+// field can be null (unknown); name and id of a GPU cannot.
+function checkHost(host, where) {
+  for (const [key, fields] of [['os', OS_FIELDS], ['cpu', ['name']]]) {
+    if (!(key in host) || host[key] === null) continue;
+    const obj = need(host, key, where, isObj);
+    for (const f of fields) if (f in obj) need(obj, f, `${where}.${key}`, orNull(strOrNum));
+  }
+  if ('memory_bytes' in host) need(host, 'memory_bytes', where, orNull(figure));
+  if ('gpus' in host && host.gpus !== null) {
+    need(host, 'gpus', where, (v) => Array.isArray(v) && v.length <= GPUS).forEach((g, i) => {
+      const w = `${where}.gpus[${i}]`;
+      if (!isObj(g)) throw new Refused('bad-value', w);
+      need(g, 'name', w, upTo(200));
+      need(g, 'id', w, upTo(40));
+      for (const f of ['vendor', 'driver_version']) if (f in g) need(g, f, w, strOrNull);
+      if ('vram_bytes' in g) need(g, 'vram_bytes', w, orNull(figure));
+    });
+  }
+}
 
 function checkRow(row, where, hasSections, isCleanup) {
   if (!isObj(row)) throw new Refused('bad-value', where);
@@ -68,7 +94,7 @@ function checkRow(row, where, hasSections, isCleanup) {
   if ('module' in row) need(row, 'module', where, short);
 }
 
-function checkModule(m, where) {
+function checkModule(m, where, year) {
   if (!isObj(m)) throw new Refused('bad-value', where);
   need(m, 'schema', where, (v) => str(v) && SCHEMA_RE.test(v), 'wrong-schema');
   // Two modules may have the same id. A repeat only makes the issue harder to read, and a refusal
@@ -78,8 +104,9 @@ function checkModule(m, where) {
   need(pkg, 'name', `${where}.package`, str);
   need(pkg, 'version', `${where}.package`, str);
   need(m, 'kind', where, (v) => KINDS.includes(v));
-  need(m, 'created_utc', where, (v) => str(v) && UTC_RE.test(v));
-  need(m, 'host', where, isObj);
+  // The year names the folder on inbox: only this UTC year, the year before or the year after.
+  need(m, 'created_utc', where, (v) => str(v) && UTC_RE.test(v) && Math.abs(Number(v.slice(0, 4)) - year) <= 1);
+  checkHost(need(m, 'host', where, isObj), `${where}.host`);
   const hasSections = 'sections' in m;
   const checks = need(m, 'checks', where, Array.isArray);
   checks.forEach((c, i) => checkRow(c, `${where}.checks[${i}]`, hasSections, false));
@@ -106,10 +133,13 @@ function checkModule(m, where) {
         need(s, 'stage', w, (v) => short(v) && v.length > 0);
         need(s, 'ms_per_frame', w, figure);
         need(s, 'fps', w, figure);
-      } else if (need(s, 'result', w, (v) => SUMMARY_RESULTS.includes(v)) === 'skipped') {
-        need(s, 'reason', w, (v) => SKIP_REASONS.includes(v));
-      } else if ('reason' in s) {
-        need(s, 'reason', w, (v) => v === null);
+      } else {
+        if (need(s, 'result', w, (v) => SUMMARY_RESULTS.includes(v)) === 'skipped') {
+          need(s, 'reason', w, (v) => SKIP_REASONS.includes(v));
+        } else if ('reason' in s) {
+          need(s, 'reason', w, (v) => v === null);
+        }
+        if ('gate' in s) need(s, 'gate', w, (v) => str(v) && CHECK_NAME_RE.test(v)); // a roll-up check (3.4)
       }
     });
   }
@@ -133,7 +163,9 @@ function checkModule(m, where) {
 }
 
 // Parse the JSON block and check the fields that sections 3 and 4.1 require.
-export function parseReport(text) {
+// nowMs gives the current UTC year for the check of created_utc.
+export function parseReport(text, nowMs = Date.now()) {
+  const year = new Date(nowMs).getUTCFullYear();
   const { markdown, json } = splitReport(text);
   let data;
   try {
@@ -149,7 +181,7 @@ export function parseReport(text) {
     need(app, 'version', 'report.app', str);
   }
   const modules = need(data, 'modules', 'report', (v) => Array.isArray(v) && v.length > 0);
-  modules.forEach((m, i) => checkModule(m, `report.modules[${i}]`));
-  need(data, 'note', 'report'); // rule 11 of section 6 checks its type and length
-  return { markdown, data };
+  modules.forEach((m, i) => checkModule(m, `report.modules[${i}]`, year));
+  need(data, 'note', 'report'); // rules 11 and 18 of section 6 check it
+  return { markdown, data, json };
 }

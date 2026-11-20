@@ -2,6 +2,9 @@ import { readFileSync } from 'node:fs';
 
 export const sample = (name) => readFileSync(new URL(`../samples/${name}`, import.meta.url), 'utf8');
 
+// The clock of the tests. The samples are from 2026, and the relay accepts created_utc only near the current year.
+export const NOW = Date.parse('2026-11-20T12:00:00Z');
+
 // The parsed JSON of the valid sample, as a fresh object each call.
 export function validData() {
   const text = sample('valid.md');
