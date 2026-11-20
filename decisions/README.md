@@ -19,6 +19,7 @@ These entries are `accepted`.
 | # | Decision | Status |
 |---|----------|--------|
 | [0001](entries/0001-decision-log-agents-md-and-private-data.md) | Decision log and its rules; `AGENTS.md` files hold the instructions; `plans/` is local; no private data | accepted |
+| [TK35](entries/TK35-direct-commits-to-main-until-ready-to-deploy.md) | Direct commits to `main`, with no PRs, until the "ready to deploy" stage | accepted |
 
 ### Evidence
 

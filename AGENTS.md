@@ -121,6 +121,10 @@ full-SHA permalink when the entry is on the default branch of that repository
   published image. A force-push is a new push. It needs its own approval.
 - Do not add AI attribution, for example a `Co-Authored-By:` trailer, to a commit or a PR. This
   rule overrides a default of a tool or a harness that adds attribution.
+- Until the "ready to deploy" stage, changes go directly to `main` in commits, not through PRs, and
+  one commit can hold more than one kind of change. The approval of the user to push covers each
+  commit on `main` until that stage. The other rules of this section still apply
+  ([ADR-TK35](decisions/entries/TK35-direct-commits-to-main-until-ready-to-deploy.md)).
 - Open each PR against `main`.
 - Put one kind of change in each PR: "code", "docs" and "CI".
 
