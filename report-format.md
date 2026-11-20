@@ -676,6 +676,7 @@ A valid module report gives evidence by its `kind`:
 
 - A row from a `passive` record never replaces a row that a package requires from a maintainer.
   For example, skellytracker requires maintainer rows for an NVIDIA version bump.
+- A freemocap module of kind `full` is a record only until the level `full` of freemocap is built.
 - The package that owns an evidence row gives its other rules for each kind. The reviewer reads
   those rules in the package.
 
@@ -724,8 +725,10 @@ These are the only packages of this format.
 | Package | Evidence for | `certify()` | Reason codes | Evidence rows |
 |---|---|---|---|---|
 | skellytracker | execution providers (EPs) | `skellytracker.certify` and `skellytracker.certify_plan`, levels `quick` and `full`. Package options: `execution_providers`, `pipeline`. The tool `tools/certify_platform.py` writes a report file of this format (schema 1.1.0; see [3.6](#36-example-skellytracker)). | `skellytracker/REASON_CODES.md` | `skellytracker/core/eps/ep_evidence.yaml` (EPs); this repository for the other sections |
+| freemocap | the app on an OS: it starts a child process, loads its bundled modules and can write its data folder | `freemocap.system.certify.own_checks.certify` and `freemocap.system.certify.own_checks.certify_plan`, level `quick`. The level `full` is not built. Package option: `ui_remote`. | the docstring of `freemocap/system/certify/own_checks.py` | none yet |
 | skellycam | cameras ([7.4](#74-camera-evidence)) | not yet implemented | not yet implemented | not yet implemented |
 
 The public repository of skellytracker is `https://github.com/domisjustanumber/skellytracker` for
-now. A commit on each pushed branch of it counts. The public repository of each other package is
+now. The public repository of freemocap is `https://github.com/domisjustanumber/freemocap` for
+now. A commit on each pushed branch of each of them counts. The public repository of skellycam is
 not set yet.

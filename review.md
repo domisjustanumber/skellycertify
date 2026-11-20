@@ -79,6 +79,10 @@ Do these steps for each module report in `modules`. One module can be valid and 
    In a report of the tool `tools/certify_platform.py`, a row `suite:packs:<EP key>` with the result
    `fail` means that the pack of that EP did not install or verify in the new store. Write no row
    for the pairs of that EP. Name the EP with the "No row for" line.
+
+   A freemocap module has no rules of its own beyond statements 1 to 6 and 8. It has no evidence
+   rows yet, so accept it or record it, and write no row ([7.3](#73-other-packages)). A freemocap
+   module of kind `full` is a record only for now.
 4. Check what the `kind` gives ([Kinds of evidence](report-format.md#72-kinds-of-evidence)):
    - A valid `full` module can give a reviewed row.
    - A valid `quick` module alone never gives a reviewed row.
