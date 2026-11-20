@@ -6,12 +6,9 @@ task. Delete an item when its work is done. The PR that closes an item records t
 - **The first real certify report.** `reports/` holds no report yet. Run skellytracker's
   `tools/certify_platform.py` on a computer of the owner, send the file through the relay, and
   review it with [`review.md`](../review.md).
-- **The relay: deploy the relay with the approval of the owner
-  ([ADR-F1KN](entries/F1KN-format-1-2-0-markdown-layout-revised.md),
-  [ADR-D1PW](entries/D1PW-format-1-3-0.md)).** The code of the relay builds the issue title and body
-  of [4.2](../report-format.md#42-layout) and checks the fields of format 1.3.0. The live relay does
-  not have this code yet. Deploy the relay only with the approval of the owner
-  ([`relay/README.md`](../relay/README.md)).
+- **The relay: turn off the test mode.** The live relay runs in test mode since 2026-11-20 for the
+  first hand-ins from freemocap. No report counts as evidence while it is on. Set `TEST_MODE` to
+  `"false"` in `relay/wrangler.jsonc` and deploy, with the approval of the owner.
 - **skellytracker: write format 1.3.0
   ([ADR-F1KN](entries/F1KN-format-1-2-0-markdown-layout-revised.md),
   [ADR-D1PW](entries/D1PW-format-1-3-0.md)).** In the module report of `certify()`, fill `summary`

@@ -670,9 +670,9 @@ line between two parts:
 The Markdown shows a result as `pass`, `fail`, `record`, `partial`, `skipped (busy)` or
 `skipped (already reviewed)`. `record` is the display of `record-only`. `skipped (busy)` is the
 display of `skipped` with the reason `busy`. `skipped (already reviewed)` is the display of
-`skipped` with the reason `reviewed`. A writer prints the summary items. It does not compute them. The relay will show the
-same summary in the issue, built from the JSON block and not from the Markdown
-([open work](decisions/open-work.md)).
+`skipped` with the reason `reviewed`. A writer prints the summary items. It does not compute them.
+The relay shows the same summary in the issue. It builds it from the JSON block and not from the
+Markdown.
 
 **Display names.** The JSON keeps each name as the OS or the driver gives it. `host` does not
 change. A writer shortens a name only for the Markdown:
