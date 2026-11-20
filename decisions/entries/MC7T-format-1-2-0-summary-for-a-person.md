@@ -1,10 +1,6 @@
 # MC7T — Format 1.2.0: the `summary` field and a short summary for a person
 
-**Status:** absorbed into [`report-format.md` 1](../../report-format.md#1-terms),
-[3.1](../../report-format.md#31-fields), [3.6](../../report-format.md#36-example-skellytracker),
-[3.7](../../report-format.md#37-summary), [4.2](../../report-format.md#42-layout),
-[6](../../report-format.md#6-privacy-rules), [8](../../report-format.md#8-versioning-of-the-format),
-2026-11-20 (direct commit to `main`). Accepted 2026-11-20 (user).
+**Status:** superseded by [F1KN](F1KN-format-1-2-0-markdown-layout-revised.md), 2026-11-20 (direct commit to `main`). Accepted 2026-11-20 (user).
 
 ## Decision
 

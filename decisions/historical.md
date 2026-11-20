@@ -9,4 +9,5 @@ the reason for a decision. The [index](README.md) has the Active and Proposed en
 
 | # | Decision | Status |
 |---|----------|--------|
-| [MC7T](entries/MC7T-format-1-2-0-summary-for-a-person.md) | Format 1.2.0: optional `summary` items; the Markdown part is a short summary for a person; display names; no person name in a camera name | absorbed into [report-format.md 1](../report-format.md#1-terms), [3.1](../report-format.md#31-fields), [3.6](../report-format.md#36-example-skellytracker), [3.7](../report-format.md#37-summary), [4.2](../report-format.md#42-layout), [6](../report-format.md#6-privacy-rules), [8](../report-format.md#8-versioning-of-the-format) |
+| [F1KN](entries/F1KN-format-1-2-0-markdown-layout-revised.md) | Format 1.2.0: the Markdown layout is revised: one system list, the table `GPU`, `Module`, `Result` | absorbed into [report-format.md 4.2](../report-format.md#42-layout), [8](../report-format.md#8-versioning-of-the-format) |
+| [MC7T](entries/MC7T-format-1-2-0-summary-for-a-person.md) | Format 1.2.0: optional `summary` items; the Markdown part is a short summary for a person; display names; no person name in a camera name | superseded by F1KN |

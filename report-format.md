@@ -469,7 +469,7 @@ person ([4.2](#42-layout)). It is not the `summary` of a section ([3.5](#35-sect
   items ([3.6](#36-example-skellytracker)). skellycam gives the `camera` items.
 - A `gpu-jpeg` item has the same `name` and `device` as its `ep` item.
 - A writer of the report file prints the items. It does not compute them from `checks`.
-- A reader must accept a module with no `summary`. That module then gives no row to the EP table
+- A reader must accept a module with no `summary`. That module then gives no row to the GPU table
   and no row to the camera table ([4.2](#42-layout)).
 - Each item obeys the privacy rules of [section 6](#6-privacy-rules). A camera name holds no name of
   a person (rule 16).
@@ -535,21 +535,27 @@ line between two parts:
      for each module: `- <package> <version> · <kind> run · valid as evidence`, or
      `not valid as evidence: <reasons>` at the end.
    - `<reasons>` is the list of `evidence.reasons`, separated by `, `.
-3. The system, as a list: `- OS: …`, `- CPU: …`, `- RAM: …`, and one `- GPU: …` line for each item
-   of `host.gpus`, with the vendor, the model and the VRAM. The values are display names (see
-   below). A line is absent when `host` does not have its key. When each module has the same
-   `host`, the writer prints the list one time. Else the writer prints one list for each module, in
-   the order of `modules`, with the line `<package> <version>:` before it.
-4. The EP table: `| EP | GPU | Result | GPU JPEG |`.
-   - It has one row for each `ep` item ([3.7](#37-summary)), in the order of `modules` and of
-     `summary`. An EP that did not run has no item, so it has no row.
-   - `EP` is the `name` of the item. `GPU` is the display name of the GPU in `host.gpus` whose `id`
-     is equal to `device`, with no VRAM. `GPU` is empty when `device` is `null`, for example for the
-     CPU EP.
-   - The `GPU JPEG` column exists only when the file has a `gpu-jpeg` item. Its cell holds the
-     result of the `gpu-jpeg` item of the same module with the same `name` and `device`. The cell is
-     empty when there is no such item.
-   - A file with no `ep` item has no EP table.
+3. The system, as a list. The writer prints it one time for the whole file: `- OS: …`, `- CPU: …`,
+   `- RAM: …`. It has no `- GPU:` line. It is never one list for each module. Each value comes from
+   the first module in `modules` whose `host` has that key. The values are display names (see
+   below). A line is absent when no module has its key.
+4. The GPU table: `| GPU | Module | Result |`. In this table, `Module` means the tested part (an EP or
+   a GPU decode), not a module report. The table of the failed checks (part 6) uses `Module` for the
+   package name.
+   - It has one row for each `ep` item ([3.7](#37-summary)). `GPU` is the display name of the GPU in
+     `host.gpus` (of the same module report) whose `id` is equal to `device`, followed by the VRAM
+     in whole GB when it is 1 GB or more, for example `NVIDIA RTX 3070 8 GB` or `Intel UHD 770`.
+     `GPU` is `-` when `device` is `null`, for example for the CPU EP. `Module` is the `name` of the
+     item, for example `CUDA`. An EP that did not run has no item, so it has no row.
+   - A `gpu-jpeg` item has its own row. The row is directly under the row of the `ep` item of the
+     same module report with the same `name` and `device`. Its `Module` cell is
+     `<name> GPU decode`, for example `CUDA GPU decode`. Its `GPU` cell is the same as the `GPU`
+     cell of that `ep` row.
+   - A GPU in `host.gpus` (of any module report) that no `ep` item names gets one row after the item
+     rows. Its `GPU` cell is as above, its `Module` cell is empty and its `Result` cell is
+     `not checked`. Each such GPU id has one row for the whole file.
+   - The order is the order of `modules`, then of `summary`.
+   - A file with no `ep` item and no GPU in any `host.gpus` has no GPU table.
 5. The cameras: a table `| Camera | Result |` with one row for each `camera` item. When no module
    has a `camera` item, this part is the line `Cameras: not checked on this system.`
 6. Only when a check failed: the line `Failed checks:` and a table `| Module | Check | Reason |`. It
@@ -579,7 +585,7 @@ change. A writer shortens a name only for the Markdown:
   example `CPU @ 3.60GHz`) and a core-count suffix (for example `8-Core Processor`). Example:
   `AMD Ryzen 7 7700X 8-Core Processor` → `AMD Ryzen 7 7700X`.
 - RAM and VRAM: whole GB, from the bytes divided by 2^30 and rounded. Example: 68388003840 bytes →
-  `64 GB`. A VRAM of less than 1 GB is not shown.
+  `64 GB`. A VRAM of less than 1 GB is not shown in the `GPU` cell.
 - OS: `os.label` without the edition words `Home` and `Pro`. Example: `Windows 11 Home 26H2` →
   `Windows 11 26H2`.
 
@@ -607,12 +613,14 @@ freemocap 2.0.0 · 2026-11-19 10:00 UTC
 - OS: Windows 11 26H2
 - CPU: AMD Ryzen 7 7700X
 - RAM: 32 GB
-- GPU: NVIDIA RTX 3070 8 GB
 
-| EP | GPU | Result | GPU JPEG |
-|---|---|---|---|
-| CUDA | NVIDIA RTX 3070 | pass | pass |
-| DirectML | NVIDIA RTX 3070 | pass | |
+| GPU | Module | Result |
+|---|---|---|
+| NVIDIA RTX 3070 8 GB | CUDA | pass |
+| NVIDIA RTX 3070 8 GB | CUDA GPU decode | pass |
+| NVIDIA RTX 3070 8 GB | DirectML | pass |
+| - | CPU | record |
+| Intel UHD 770 | | not checked |
 
 | Camera | Result |
 |---|---|
@@ -640,7 +648,8 @@ Note of the person:
    "summary": [
     {"group": "ep", "name": "CUDA", "device": "10de:2484", "result": "pass"},
     {"group": "gpu-jpeg", "name": "CUDA", "device": "10de:2484", "result": "pass"},
-    {"group": "ep", "name": "DirectML", "device": "10de:2484", "result": "pass"}
+    {"group": "ep", "name": "DirectML", "device": "10de:2484", "result": "pass"},
+    {"group": "ep", "name": "CPU", "device": null, "result": "record-only"}
    ]},
   {"schema": "skellycertify.report/1.2.0", "package": {"name": "skellycam", "...": "..."},
    "summary": [
@@ -654,8 +663,9 @@ Note of the person:
 ````
 
 The `"...": "..."` items only make the example short. A real file holds each required field.
-The names, the ids and the results are examples. The two modules have the same `host`, so the
-system list shows one time. The skellycam values are examples. skellycam has no checks of this
+The names, the ids and the results are examples. The system list shows one time for the whole file.
+The `host.gpus` of the modules (not shown) hold the RTX 3070 (`10de:2484`) and the Intel UHD 770
+(`8086:4688`). No `ep` item names the Intel UHD 770, so it has the row `not checked`. The skellycam values are examples. skellycam has no checks of this
 format yet.
 
 ## 5. Results and reason codes
@@ -835,8 +845,10 @@ Changes of the format:
 - 1.2.0: A module report can have the optional field `summary` ([3.7](#37-summary)). The Markdown
   part has a new layout: a short summary for a person ([4.2](#42-layout)). A reader of major
   version 1 still accepts a file of 1.1.0 or 1.0.0, and a file in the earlier Markdown layout. The
-  JSON block is the data in each layout
-  ([ADR-MC7T](decisions/entries/MC7T-format-1-2-0-summary-for-a-person.md)).
+  JSON block is the data in each layout. The owner revised this layout on the same day, before a
+  writer shipped it: one system list for the whole file and the GPU table
+  ([ADR-F1KN](decisions/entries/F1KN-format-1-2-0-markdown-layout-revised.md), which supersedes
+  ADR-MC7T).
 - 1.1.0: A module report can have the optional field `id` ([3.1](#31-fields)). A report file can
   hold more than one module report of one package ([4.1](#41-content)).
 - 1.0.0: The first version.
