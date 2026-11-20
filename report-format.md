@@ -1,6 +1,6 @@
 # Report format
 
-**Status:** draft. Format version 1.1.0.
+**Status:** draft. Format version 1.2.0.
 
 This document is the contract between the freemocap packages, the freemocap app and this
 repository. Each package implements it in its own code. There is no shared code package.
@@ -19,6 +19,8 @@ repository. Each package implements it in its own code. There is no shared code 
 | evidence row | A reviewed row in the package that owns the result. The app reads it to show "certified". |
 | kind | The kind of a module report: `quick`, `full` or `passive`. |
 | public repository | The repository of a package where a commit counts as public ([section 9](#9-packages)). |
+| system | The computer of a run. The text of a report and of this document uses "system" for it, not "machine". |
+| summary item | One line of the summary for a person in a module report ([3.7](#37-summary)). |
 
 ## 2. The function
 
@@ -218,14 +220,15 @@ the questions and puts the answers in `answers`.
 
 | Field | Type | Required | Meaning |
 |---|---|---|---|
-| `schema` | string | yes | `skellycertify.report/1.1.0` ([section 8](#8-versioning-of-the-format)). |
-| `id` | string | no | A version 4 UUID in the lower-case form with hyphens (36 characters), for example `3f2b8c1e-9a4d-4e7b-b6a1-0c5d2e8f7a90`. The package gives it when it saves the report. It is unique in a report file. It holds no time and no machine data. A version 1 UUID is forbidden, because it holds the MAC address. A report that was not saved can have no `id`. |
+| `schema` | string | yes | `skellycertify.report/1.2.0` ([section 8](#8-versioning-of-the-format)). |
+| `id` | string | no | A version 4 UUID in the lower-case form with hyphens (36 characters), for example `3f2b8c1e-9a4d-4e7b-b6a1-0c5d2e8f7a90`. The package gives it when it saves the report. It is unique in a report file. It holds no time and no data of the system. A version 1 UUID is forbidden, because it holds the MAC address. A report that was not saved can have no `id`. |
 | `package` | object | yes | See [3.2](#32-package). |
 | `kind` | string | yes | `quick`, `full` or `passive` ([7.2](#72-kinds-of-evidence)). `passive` is reserved for a record that the package gathers from normal use ([7.3](#73-the-passive-record-reserved)). Its fields are not yet defined. A writer must not write `passive` in this version. |
 | `created_utc` | string | yes | The start of the run, `YYYY-MM-DDTHH:MM:SSZ`. |
 | `host` | object | yes | Hardware and software facts. See [3.3](#33-host). |
 | `checks` | list | yes | Each check of the run. See [3.4](#34-check). |
 | `sections` | list | no | The sections of the run. See [3.5](#35-section). |
+| `summary` | list | no | The summary items of the run for a person. See [3.7](#37-summary). |
 | `cleanup` | list | no | One check object for each cleanup step that failed. An empty list or no field means that each step passed. |
 | `answers` | list | no | The answers to the yes/no questions of the package: `section`, `id`, `text`, `answer` (`yes`, `no` or `null`). `text` is the fixed text of the question. |
 | `details` | object | no | Facts of the package that have no field here. They obey [section 6](#6-privacy-rules). |
@@ -326,10 +329,15 @@ result `not-run`, with a reason such as `ep-not-installed`, `gpu-not-usable` or 
 - `details.versions` gives the versions one time for the report, not for each EP.
 - The name and the driver version of a GPU are only in `host.gpus`. Join `host.gpus[].id` with
   `details.eps.<label>.gpu`. Two GPUs of one model have the same id.
+- `summary` ([3.7](#37-summary)) has one `ep` item for each pair that ran. A pair that is `not-run`
+  has no item. The result of an `ep` item is the result of the row of the pair (`<label>`). The CPU
+  EP of a full report has no such row. skellytracker decides the result of its item.
+- skellytracker adds a `gpu-jpeg` item only when a GPU JPEG decode test ran for that pair.
+  skellytracker decides the result of that item.
 
 ```json
 {
- "schema": "skellycertify.report/1.1.0",
+ "schema": "skellycertify.report/1.2.0",
  "id": "3f2b8c1e-9a4d-4e7b-b6a1-0c5d2e8f7a90",
  "package": {"name": "skellytracker", "version": "2.0.0", "commit": "0123456789abcdef0123456789abcdef01234567",
              "tree_modified": false},
@@ -345,6 +353,11 @@ result `not-run`, with a reason such as `ep-not-installed`, `gpu-not-usable` or 
     "vram_bytes": 8589934592}
   ]
  },
+ "summary": [
+  {"group": "ep", "name": "CUDA", "device": "10de:2484", "result": "pass"},
+  {"group": "gpu-jpeg", "name": "CUDA", "device": "10de:2484", "result": "pass"},
+  {"group": "ep", "name": "DirectML", "device": "10de:2484", "result": "pass"}
+ ],
  "checks": [
   {"name": "cuda@10de-2484-0:probe", "result": "pass", "reason": null},
   {"name": "cuda@10de-2484-0:image", "result": "pass", "reason": null},
@@ -440,6 +453,27 @@ The order of the checks of a full report:
   not selected, did not run or gave no result) and `cancelled`. A failed `suite:hardware` or
   `suite:packs` row adds no reason: a failed check is a result that the reviewer reads.
 
+### 3.7 `summary`
+
+`summary` is optional. It is a list of summary items. They give the facts of the summary for a
+person ([4.2](#42-layout)). It is not the `summary` of a section ([3.5](#35-section)).
+
+| Field | Meaning |
+|---|---|
+| `group` | `ep`, `gpu-jpeg` or `camera`. |
+| `name` | A short fixed name from the vocabulary of the package, for example `TensorRT RTX`, `CUDA`, `DirectML` or `CPU`. For a camera, the camera model, for example `Logitech C922`. |
+| `device` | For `ep` and `gpu-jpeg`: the `id` of the GPU in `host.gpus`. For a PCI device this is `vvvv:dddd`. For `camera`: the USB id `vvvv:pppp`. Else `null`. |
+| `result` | `pass`, `fail` or `record-only`. |
+
+- The package that ran the checks fills `summary`. skellytracker gives the `ep` and `gpu-jpeg`
+  items ([3.6](#36-example-skellytracker)). skellycam gives the `camera` items.
+- A `gpu-jpeg` item has the same `name` and `device` as its `ep` item.
+- A writer of the report file prints the items. It does not compute them from `checks`.
+- A reader must accept a module with no `summary`. That module then gives no row to the EP table
+  and no row to the camera table ([4.2](#42-layout)).
+- Each item obeys the privacy rules of [section 6](#6-privacy-rules). A camera name holds no name of
+  a person (rule 16).
+
 ## 4. The report file
 
 ### 4.1 Content
@@ -448,7 +482,7 @@ One report file holds one JSON object:
 
 | Field | Meaning |
 |---|---|
-| `schema` | `skellycertify.report/1.1.0`. |
+| `schema` | `skellycertify.report/1.2.0`. |
 | `app` | `name`, `version` (SemVer) and `commit` of the app, or `null` for a report of one package that ran alone. |
 | `modules` | A list of module reports. The list holds at least one module report. A package can give more than one module report, for example one for each run. Each module report is independent ([7.1](#71-validity)). |
 | `note` | The one free-text note of the person, or `null`. At most 2000 characters. |
@@ -487,18 +521,67 @@ So:
 The file is Markdown, in UTF-8, with `\n` line ends. Its name is
 `certify-report-<yyyymmddThhmmssZ>.md`, with the UTC start time of the run.
 
+The Markdown part is a short summary for a person. It has these parts, in this order, with a blank
+line between two parts:
+
 1. A title line: `# Certify report`.
-2. One line with the schema, the app and its version (if any), and the UTC time.
-3. One line for each module: `**<name> <version>:** valid as evidence.`, or
-   `**<name> <version>:** not valid as evidence: <reasons>.`
-4. A summary table with one row for each section that has the result `fail`. When a module has no
-   sections, it has one row for each check that has the result `fail`. The header is
-   `| Module | Section | Result | Reason |`. A file with no such row has no table.
-5. Optional: the details for a person, for example a table of checks for each section and the
-   note. A writer puts the short summary for a person first. The JSON block holds each check.
-6. Last: the heading `## Data` and one fenced code block with the info string `json`. It holds
+2. The header.
+   - One module with `"app": null`: one line
+     `<package> <version> · <kind> run · <YYYY-MM-DD HH:MM> UTC · valid as evidence`. The time is
+     `created_utc` of the module. A module that is not valid ends the line with
+     `not valid as evidence: <reasons>`.
+   - Two or more modules, or an app: one line `<app> <version> · <YYYY-MM-DD HH:MM> UTC`, with the
+     UTC start time of the run. With `"app": null`, the line has only the time. Then one list line
+     for each module: `- <package> <version> · <kind> run · valid as evidence`, or
+     `not valid as evidence: <reasons>` at the end.
+   - `<reasons>` is the list of `evidence.reasons`, separated by `, `.
+3. The system, as a list: `- OS: …`, `- CPU: …`, `- RAM: …`, and one `- GPU: …` line for each item
+   of `host.gpus`, with the vendor, the model and the VRAM. The values are display names (see
+   below). A line is absent when `host` does not have its key. When each module has the same
+   `host`, the writer prints the list one time. Else the writer prints one list for each module, in
+   the order of `modules`, with the line `<package> <version>:` before it.
+4. The EP table: `| EP | GPU | Result | GPU JPEG |`.
+   - It has one row for each `ep` item ([3.7](#37-summary)), in the order of `modules` and of
+     `summary`. An EP that did not run has no item, so it has no row.
+   - `EP` is the `name` of the item. `GPU` is the display name of the GPU in `host.gpus` whose `id`
+     is equal to `device`, with no VRAM. `GPU` is empty when `device` is `null`, for example for the
+     CPU EP.
+   - The `GPU JPEG` column exists only when the file has a `gpu-jpeg` item. Its cell holds the
+     result of the `gpu-jpeg` item of the same module with the same `name` and `device`. The cell is
+     empty when there is no such item.
+   - A file with no `ep` item has no EP table.
+5. The cameras: a table `| Camera | Result |` with one row for each `camera` item. When no module
+   has a `camera` item, this part is the line `Cameras: not checked on this system.`
+6. Only when a check failed: the line `Failed checks:` and a table `| Module | Check | Reason |`. It
+   has one row for each section that has the result `fail`. When a module has no sections, it has
+   one row for each check that has the result `fail`. `Module` is the package name. `Check` is the
+   `name` of the section or of the check. `Reason` is the reason code.
+7. Only when `note` is not `null`: the line `Note of the person:` and the note as a quote. Each line
+   of the note starts with `> `.
+8. Last: the heading `## Data` and one fenced code block with the info string `json`. It holds
    the object of [4.1](#41-content). The fence has at least 3 backticks. It is longer than each
    run of backticks in the JSON.
+
+The Markdown shows a result as `pass`, `fail` or `record`. `record` is the display of
+`record-only`. A writer prints the summary items. It does not compute them. The relay will show the
+same summary in the issue, built from the JSON block and not from the Markdown
+([open work](decisions/open-work.md)).
+
+**Display names.** The JSON keeps each name as the OS or the driver gives it. `host` does not
+change. A writer shortens a name only for the Markdown:
+
+- GPU: remove `(R)`, `(TM)`, `GeForce`, `Radeon`, `Arc`, `Graphics`, `GPU` and `Series`. The vendor
+  stays first. Keep `RTX`, `GTX`, `Quadro`, `TITAN`, `Laptop`, `Ti`, `SUPER`, `RX`, `Pro`, `Vega`,
+  `FirePro`, `XT`, `UHD`, `HD`, `Iris`, `Xe`, `MAX` and `Adreno`. Examples:
+  `NVIDIA GeForce RTX 3070` → `NVIDIA RTX 3070`; `AMD Radeon RX 7800 XT` → `AMD RX 7800 XT`;
+  `Intel(R) UHD Graphics 770` → `Intel UHD 770`; `Intel(R) Arc(TM) A770 Graphics` → `Intel A770`.
+- CPU: remove `(R)`, `(TM)`, a generation prefix (for example `13th Gen`), a clock speed (for
+  example `CPU @ 3.60GHz`) and a core-count suffix (for example `8-Core Processor`). Example:
+  `AMD Ryzen 7 7700X 8-Core Processor` → `AMD Ryzen 7 7700X`.
+- RAM and VRAM: whole GB, from the bytes divided by 2^30 and rounded. Example: 68388003840 bytes →
+  `64 GB`. A VRAM of less than 1 GB is not shown.
+- OS: `os.label` without the edition words `Home` and `Pro`. Example: `Windows 11 Home 26H2` →
+  `Windows 11 26H2`.
 
 Rules for a reader:
 
@@ -516,32 +599,64 @@ Rules for a reader:
 ````markdown
 # Certify report
 
-Schema `skellycertify.report/1.1.0`, app freemocap 2.0.0, created 2026-11-19T10:00:00Z (UTC).
+freemocap 2.0.0 · 2026-11-19 10:00 UTC
 
-**skellytracker 2.0.0:** valid as evidence.
-**skellycam 1.0.0:** not valid as evidence: modified-tree.
+- skellytracker 2.0.0 · quick run · valid as evidence
+- skellycam 1.0.0 · quick run · not valid as evidence: modified-tree
 
-| Module | Section | Result | Reason |
+- OS: Windows 11 26H2
+- CPU: AMD Ryzen 7 7700X
+- RAM: 32 GB
+- GPU: NVIDIA RTX 3070 8 GB
+
+| EP | GPU | Result | GPU JPEG |
 |---|---|---|---|
-| skellycam | open-camera | fail | timed-out |
+| CUDA | NVIDIA RTX 3070 | pass | pass |
+| DirectML | NVIDIA RTX 3070 | pass | |
+
+| Camera | Result |
+|---|---|
+| Logitech C922 | pass |
+| Razer Kiyo Pro | fail |
+
+Failed checks:
+
+| Module | Check | Reason |
+|---|---|---|
+| skellycam | open-camera | timed-out |
+
+Note of the person:
+
+> The Razer camera works in other apps.
 
 ## Data
 
 ```json
 {
- "schema": "skellycertify.report/1.1.0",
+ "schema": "skellycertify.report/1.2.0",
  "app": {"name": "freemocap", "version": "2.0.0", "commit": "89abcdef0123456789abcdef0123456789abcdef"},
  "modules": [
-  {"schema": "skellycertify.report/1.1.0", "package": {"name": "skellytracker", "...": "..."}},
-  {"schema": "skellycertify.report/1.1.0", "package": {"name": "skellycam", "...": "..."}}
+  {"schema": "skellycertify.report/1.2.0", "package": {"name": "skellytracker", "...": "..."},
+   "summary": [
+    {"group": "ep", "name": "CUDA", "device": "10de:2484", "result": "pass"},
+    {"group": "gpu-jpeg", "name": "CUDA", "device": "10de:2484", "result": "pass"},
+    {"group": "ep", "name": "DirectML", "device": "10de:2484", "result": "pass"}
+   ]},
+  {"schema": "skellycertify.report/1.2.0", "package": {"name": "skellycam", "...": "..."},
+   "summary": [
+    {"group": "camera", "name": "Logitech C922", "device": "046d:085c", "result": "pass"},
+    {"group": "camera", "name": "Razer Kiyo Pro", "device": "1532:0e05", "result": "fail"}
+   ]}
  ],
- "note": null
+ "note": "The Razer camera works in other apps."
 }
 ```
 ````
 
 The `"...": "..."` items only make the example short. A real file holds each required field.
-The skellycam values are examples. skellycam has no checks of this format yet.
+The names, the ids and the results are examples. The two modules have the same `host`, so the
+system list shows one time. The skellycam values are examples. skellycam has no checks of this
+format yet.
 
 ## 5. Results and reason codes
 
@@ -630,6 +745,10 @@ These rules apply to the writer. A test of the writer can check them. A reviewer
     output of an OS tool.
 15. Before the person writes the note, the writer tells the person not to write a name, contact
     details or other personal details.
+16. A camera name holds no name of a person. The package that writes the name takes it from the
+    model string of the device. The package removes the name of a person before the report exists.
+    For example, `<name>'s iPhone Camera` becomes `iPhone Camera`. The relay cannot find a first
+    name, so this rule is a duty of the writer.
 
 Allowed facts: model names of a CPU, a GPU or a camera, PCI vendor and device ids, USB vendor and
 product ids, driver and package versions, the OS label, and test results. These facts identify a
@@ -713,6 +832,11 @@ the capture backend and the OS. Camera evidence is not part of an EP row.
 
 Changes of the format:
 
+- 1.2.0: A module report can have the optional field `summary` ([3.7](#37-summary)). The Markdown
+  part has a new layout: a short summary for a person ([4.2](#42-layout)). A reader of major
+  version 1 still accepts a file of 1.1.0 or 1.0.0, and a file in the earlier Markdown layout. The
+  JSON block is the data in each layout
+  ([ADR-MC7T](decisions/entries/MC7T-format-1-2-0-summary-for-a-person.md)).
 - 1.1.0: A module report can have the optional field `id` ([3.1](#31-fields)). A report file can
   hold more than one module report of one package ([4.1](#41-content)).
 - 1.0.0: The first version.
