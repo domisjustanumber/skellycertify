@@ -36,10 +36,13 @@ The relay builds the issue only from the facts of the JSON block, and from the n
 
 - Title: `[certify] <app or package> <version> · <OS label> · <GPU model names>`.
 - One line for each module: valid or not valid as evidence, with the reason codes. The line shows
-  the `id` of the module when it has one.
+  the `id` of the module when it has one. It shows the number of checks for each result that
+  occurs, in the order `pass`, `fail`, `not-run`, `record-only`.
 - A table: module (with its `id`, if any), section or check, result, reason. The table comes from
   the JSON, not from the Markdown part. If the body is longer than 65,536 characters, the relay
-  shortens the table and says so.
+  shortens the table and says so. It removes the `pass` rows first, then the `not-run` rows, then
+  the `record-only` rows. It keeps each `fail` row. In each step it starts at the end of the table.
+  Only when the `fail` rows alone are too long does it remove `fail` rows from the end.
 - The note as a quote, at most 2000 characters.
 - The link to the file, the SHA-256 and a hidden marker `<!-- skellycertify-report sha256:<hash> -->`.
 

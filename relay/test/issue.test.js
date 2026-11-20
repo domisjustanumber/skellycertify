@@ -45,8 +45,12 @@ test('the title is built from facts and is safe', () => {
 
 test('the body has the module lines, the table, the note, the link and the marker', () => {
   const body = buildBody(args(validData()));
-  assert.match(body, /- `skellytracker` `2\.0\.0`: valid as evidence\./);
+  // The counts are of the checks, not of the two sections.
+  assert.match(body, /^- `skellytracker` `2\.0\.0` · 7 pass, 2 not-run: valid as evidence\.$/m);
   assert.match(body, /\| `skellytracker` \| `1\. Checkout and versions` \| `pass` \| {2}\|/);
+  const none = validData();
+  none.modules[0].checks = [];
+  assert.match(buildBody(args(none)), /^- `skellytracker` `2\.0\.0`: valid as evidence\.$/m);
   assert.match(body, /> Example note: the run took about five minutes\./);
   assert.ok(body.includes(`Report file: [inbox/2026/${HASH}.md](https://github.com/domisjustanumber/skellycertify/blob/`));
   assert.ok(body.endsWith(marker(HASH)));
@@ -61,6 +65,9 @@ test('a module that is not valid lists its reasons; checks make the rows when th
   const body = buildBody(args(d));
   assert.match(body, /not valid as evidence: `modified-tree`, `partial-run`\./);
   assert.match(body, /\| `skellytracker` \| `amdgpu` \| `not-run` \| `not-offered` \|/);
+  const names = body.split('\n').filter((l) => l.startsWith('| `skellytracker`')).map((r) => r.split(' | ')[1]);
+  assert.deepEqual(names, d.modules[0].checks.map((c) => `\`${c.name}\``), 'a body that fits has all rows in file order');
+  assert.doesNotMatch(body, /shortened/);
 });
 
 test('hostile report strings are neutral in the body; only the relay marker is HTML', () => {
@@ -91,6 +98,36 @@ test('a long table is shortened to fit the body limit, and the body says so', ()
   assert.ok(body.length <= BODY_LIMIT, String(body.length));
   assert.match(body, /The table is shortened: \d+ of 3000 rows\./);
   assert.ok(body.endsWith(marker(HASH)));
+  // Only fail rows are left, so the last step drops them from the end.
+  assert.match(body, /`check-0-z+`/);
+  assert.doesNotMatch(body, /`check-2999-z+`/);
+});
+
+test('a long table drops pass rows first, then not-run, then record-only, and keeps each fail row', () => {
+  const d = validData();
+  const kinds = (i) => (i % 20 < 12 ? 'pass' : i % 20 < 17 ? 'not-run' : i % 20 < 19 ? 'fail' : 'record-only');
+  const ids = ['3f2b8c1e-9a4d-4e7b-b6a1-0c5d2e8f7a90', 'c1d2e3f4-5a6b-4c7d-8e9f-a0b1c2d3e4f5'];
+  d.modules = ids.map((id, k) => {
+    const m = { ...validData().modules[0], id };
+    delete m.sections;
+    m.checks = Array.from({ length: 400 }, (_, i) => ({ name: `m${k}-c${i}-`.padEnd(120, 'z'), result: kinds(i), reason: 'r'.repeat(80) }));
+    return m;
+  });
+  const all = d.modules.flatMap((m) => m.checks);
+  const body = buildBody(args(d));
+  assert.ok(body.length <= BODY_LIMIT, String(body.length));
+  const kept = body.split('\n').filter((l) => l.startsWith('| `skellytracker`')).map((r) => r.split(' | ')[1].slice(1, -1));
+  assert.match(body, new RegExp(`The table is shortened: ${kept.length} of 800 rows\\.`));
+  const index = kept.map((name) => all.findIndex((c) => c.name === name));
+  assert.ok(index.every((n, i) => n >= 0 && (i === 0 || n > index[i - 1])), 'the rows keep their order');
+  const keptOf = (result) => all.filter((c) => c.result === result && kept.includes(c.name));
+  assert.equal(keptOf('fail').length, 80);
+  assert.equal(keptOf('record-only').length, 40);
+  assert.equal(keptOf('pass').length, 0);
+  // Some not-run rows are dropped, after all pass rows, from the end of the table.
+  const notRun = all.filter((c) => c.result === 'not-run');
+  assert.ok(keptOf('not-run').length > 0 && keptOf('not-run').length < notRun.length);
+  assert.deepEqual(keptOf('not-run'), notRun.slice(0, keptOf('not-run').length));
 });
 
 test('many modules: at most 100 module lines', () => {
@@ -107,8 +144,8 @@ test('the id of each module is in its module line and in the first cell of its r
   const b = 'c1d2e3f4-5a6b-4c7d-8e9f-a0b1c2d3e4f5';
   d.modules = [{ ...d.modules[0], id: a }, { ...validData().modules[0], id: b, evidence: { valid: false, reasons: ['check-failed'] } }];
   const body = buildBody(args(d));
-  assert.match(body, new RegExp(`^- \`skellytracker\` \`2\.0\.0\` · id \`${a}\`: valid as evidence\.$`, 'm'));
-  assert.match(body, new RegExp(`^- \`skellytracker\` \`2\.0\.0\` · id \`${b}\`: not valid as evidence: \`check-failed\`\.$`, 'm'));
+  assert.match(body, new RegExp(`^- \`skellytracker\` \`2\.0\.0\` · id \`${a}\` · 7 pass, 2 not-run: valid as evidence\.$`, 'm'));
+  assert.match(body, new RegExp(`^- \`skellytracker\` \`2\.0\.0\` · id \`${b}\` · 7 pass, 2 not-run: not valid as evidence: \`check-failed\`\.$`, 'm'));
   const rows = body.split('\n').filter((l) => l.startsWith('| `skellytracker`'));
   assert.equal(rows.length, 4);
   assert.deepEqual(rows.map((r) => r.split(' | ')[0]), [a, a, b, b].map((id) => `| \`skellytracker\` \`${id}\``));

@@ -3,6 +3,8 @@
 // signs: no "@" (mention), no "#" (issue link), no "<" or ">" (HTML), no "[", "]", "!", "|", "`", "*".
 // It breaks "://" and "www." so that GitHub makes no link.
 
+import { RESULTS } from './report.js';
+
 export const BODY_LIMIT = 65536; // characters of an issue body on GitHub
 const TITLE_LIMIT = 200; // GitHub allows 256; keep a margin
 const NOTE_LIMIT = 2000;
@@ -39,7 +41,9 @@ export function buildTitle(data) {
 }
 
 function moduleLine(m) {
-  const head = `- ${code(m.package.name, 60)} ${code(m.package.version, 60)}${m.id ? ` · id ${code(m.id, 36)}` : ''}:`;
+  // The count of the checks for each result that occurs, in the order of RESULTS.
+  const counts = RESULTS.map((r) => [m.checks.filter((c) => c.result === r).length, r]).filter(([n]) => n > 0).map(([n, r]) => `${n} ${r}`).join(', ');
+  const head = `- ${code(m.package.name, 60)} ${code(m.package.version, 60)}${m.id ? ` · id ${code(m.id, 36)}` : ''}${counts ? ` · ${counts}` : ''}:`;
   if (m.evidence.valid === true && m.evidence.reasons.length === 0) return `${head} valid as evidence.`;
   const reasons = m.evidence.reasons.map((r) => code(r, 80)).join(', ');
   return `${head} not valid as evidence${reasons ? `: ${reasons}` : ''}.`;
@@ -51,9 +55,9 @@ function tableRows(data) {
   for (const m of data.modules) {
     const name = `${code(m.package.name, 60)}${m.id ? ` ${code(m.id, 36)}` : ''}`;
     if (Array.isArray(m.sections)) {
-      for (const s of m.sections) rows.push(`| ${name} | ${code(`${s.id}. ${s.name}`, 80)} | ${code(s.result, 20)} | ${code(s.reason, 80)} |`);
+      for (const s of m.sections) rows.push({ line: `| ${name} | ${code(`${s.id}. ${s.name}`, 80)} | ${code(s.result, 20)} | ${code(s.reason, 80)} |`, result: s.result });
     } else {
-      for (const c of m.checks) rows.push(`| ${name} | ${code(c.name, 128)} | ${code(c.result, 20)} | ${code(c.reason, 80)} |`);
+      for (const c of m.checks) rows.push({ line: `| ${name} | ${code(c.name, 128)} | ${code(c.result, 20)} | ${code(c.reason, 80)} |`, result: c.result });
     }
   }
   return rows;
@@ -96,16 +100,25 @@ export function buildBody({ data, hash, filePath, fileUrl, testMode }) {
     marker(hash),
   ];
   const rows = tableRows(data);
-  const make = (n) => {
-    const table = ['| Module | Section or check | Result | Reason |', '|---|---|---|---|', ...rows.slice(0, n)];
-    if (n < rows.length) table.push('', `The table is shortened: ${n} of ${rows.length} rows. The report file holds all rows.`);
+  const shortened = (n) => `The table is shortened: ${n} of ${rows.length} rows. The report file holds all rows.`;
+  const make = (kept) => {
+    const table = ['| Module | Section or check | Result | Reason |', '|---|---|---|---|', ...kept.map((r) => r.line)];
+    if (kept.length < rows.length) table.push('', shortened(kept.length));
     return [...head, ...table, '', ...note, ...tail].join('\n');
   };
-  let n = rows.length;
-  let body = make(n);
-  while (body.length > BODY_LIMIT && n > 0) {
-    n = Math.max(0, n - Math.max(1, Math.ceil((body.length - BODY_LIMIT) / 60)));
-    body = make(n);
+  const body = make(rows);
+  if (body.length <= BODY_LIMIT) return body;
+  // Remove the excess and room for the shortened line. Each row takes its length and one "\n".
+  let excess = body.length - BODY_LIMIT + 2 + shortened(rows.length).length;
+  const drop = rows.map(() => false);
+  // Drop pass rows first, then not-run, then record-only, each from the end of the table.
+  // A fail row (or an unknown result) goes only at the last step (null: any row), so the body always fits.
+  for (const result of ['pass', 'not-run', 'record-only', null]) {
+    for (let i = rows.length - 1; i >= 0 && excess > 0; i--) {
+      if (drop[i] || (result !== null && rows[i].result !== result)) continue;
+      drop[i] = true;
+      excess -= rows[i].line.length + 1;
+    }
   }
-  return body;
+  return make(rows.filter((_, i) => !drop[i]));
 }

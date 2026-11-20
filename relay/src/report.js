@@ -15,7 +15,7 @@ const UTC_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/;
 const CHECK_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9_.:@-]{0,127}$/;
 const ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/; // a version 4 UUID in lower case
 const KINDS = ['quick', 'full', 'passive'];
-const RESULTS = ['pass', 'fail', 'not-run', 'record-only'];
+export const RESULTS = ['pass', 'fail', 'not-run', 'record-only'];
 
 // Split the file into the Markdown part and the JSON text of the last fenced `json` block.
 // The file must end with that block and one "\n" (section 4.2).

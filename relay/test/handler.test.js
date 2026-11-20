@@ -61,8 +61,8 @@ test('the quick sample: two modules of one package with their ids make one issue
   assert.equal(r.res.status, 200);
   const { body } = gh.state.issues[0];
   assert.ok(body.length <= BODY_LIMIT);
-  assert.match(body, /· id `3f2b8c1e-9a4d-4e7b-b6a1-0c5d2e8f7a90`: valid as evidence\./);
-  assert.match(body, /· id `c1d2e3f4-5a6b-4c7d-8e9f-a0b1c2d3e4f5`: not valid as evidence: `check-failed`\./);
+  assert.match(body, /· id `3f2b8c1e-9a4d-4e7b-b6a1-0c5d2e8f7a90` · 5 pass: valid as evidence\./);
+  assert.match(body, /· id `c1d2e3f4-5a6b-4c7d-8e9f-a0b1c2d3e4f5` · 6 pass, 2 fail: not valid as evidence: `check-failed`\./);
 });
 
 test('the log line holds only time, outcome, status, size and the hash prefix', async () => {
