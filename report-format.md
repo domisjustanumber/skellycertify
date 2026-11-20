@@ -725,7 +725,7 @@ These are the only packages of this format.
 | Package | Evidence for | `certify()` | Reason codes | Evidence rows |
 |---|---|---|---|---|
 | skellytracker | execution providers (EPs) | `skellytracker.certify` and `skellytracker.certify_plan`, levels `quick` and `full`. Package options: `execution_providers`, `pipeline`. The tool `tools/certify_platform.py` writes a report file of this format (schema 1.1.0; see [3.6](#36-example-skellytracker)). | `skellytracker/REASON_CODES.md` | `skellytracker/core/eps/ep_evidence.yaml` (EPs); this repository for the other sections |
-| freemocap | the app on an OS: it starts a child process, loads its bundled modules and can write its data folder | `freemocap.system.certify.own_checks.certify` and `freemocap.system.certify.own_checks.certify_plan`, level `quick`. The level `full` is not built. Package option: `ui_remote`. | the docstring of `freemocap/system/certify/own_checks.py` | none yet |
+| freemocap | the app on an OS: it starts a child process, loads its bundled modules and can write its data folder | `freemocap.certify` and `freemocap.certify_plan`, level `quick`. The level `full` is not built. Package options: `ui_remote`, `blender_exe_path`. | the docstring of `freemocap/certification.py` | none yet |
 | skellycam | cameras ([7.4](#74-camera-evidence)) | not yet implemented | not yet implemented | not yet implemented |
 
 The public repository of skellytracker is `https://github.com/domisjustanumber/skellytracker` for
