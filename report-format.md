@@ -491,10 +491,11 @@ The file is Markdown, in UTF-8, with `\n` line ends. Its name is
 2. One line with the schema, the app and its version (if any), and the UTC time.
 3. One line for each module: `**<name> <version>:** valid as evidence.`, or
    `**<name> <version>:** not valid as evidence: <reasons>.`
-4. A summary table with one row for each section, or for each check when a module has no
-   sections: `| Module | Section | Result | Reason |`.
+4. A summary table with one row for each section that has the result `fail`. When a module has no
+   sections, it has one row for each check that has the result `fail`. The header is
+   `| Module | Section | Result | Reason |`. A file with no such row has no table.
 5. Optional: the details for a person, for example a table of checks for each section and the
-   note.
+   note. A writer puts the short summary for a person first. The JSON block holds each check.
 6. Last: the heading `## Data` and one fenced code block with the info string `json`. It holds
    the object of [4.1](#41-content). The fence has at least 3 backticks. It is longer than each
    run of backticks in the JSON.
@@ -522,8 +523,6 @@ Schema `skellycertify.report/1.1.0`, app freemocap 2.0.0, created 2026-11-19T10:
 
 | Module | Section | Result | Reason |
 |---|---|---|---|
-| skellytracker | 1. Checkout and versions | pass | |
-| skellytracker | 3. EPs: install, verify and certify | pass | |
 | skellycam | open-camera | fail | timed-out |
 
 ## Data

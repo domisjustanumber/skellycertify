@@ -49,15 +49,15 @@ function moduleLine(m) {
   return `${head} not valid as evidence${reasons ? `: ${reasons}` : ''}.`;
 }
 
-// One row for each section, or for each check when a module has no sections (section 4.2).
+// One row for each failed section, or for each failed check when a module has no sections.
 function tableRows(data) {
   const rows = [];
   for (const m of data.modules) {
     const name = `${code(m.package.name, 60)}${m.id ? ` ${code(m.id, 36)}` : ''}`;
-    if (Array.isArray(m.sections)) {
-      for (const s of m.sections) rows.push({ line: `| ${name} | ${code(`${s.id}. ${s.name}`, 80)} | ${code(s.result, 20)} | ${code(s.reason, 80)} |`, result: s.result });
-    } else {
-      for (const c of m.checks) rows.push({ line: `| ${name} | ${code(c.name, 128)} | ${code(c.result, 20)} | ${code(c.reason, 80)} |`, result: c.result });
+    const hasSections = Array.isArray(m.sections);
+    for (const r of (hasSections ? m.sections : m.checks).filter((x) => x.result === 'fail')) {
+      const label = hasSections ? code(`${r.id}. ${r.name}`, 80) : code(r.name, 128);
+      rows.push(`| ${name} | ${label} | ${code(r.result, 20)} | ${code(r.reason, 80)} |`);
     }
   }
   return rows;
@@ -102,23 +102,17 @@ export function buildBody({ data, hash, filePath, fileUrl, testMode }) {
   const rows = tableRows(data);
   const shortened = (n) => `The table is shortened: ${n} of ${rows.length} rows. The report file holds all rows.`;
   const make = (kept) => {
-    const table = ['| Module | Section or check | Result | Reason |', '|---|---|---|---|', ...kept.map((r) => r.line)];
+    const table = rows.length
+      ? ['| Module | Section or check | Result | Reason |', '|---|---|---|---|', ...kept]
+      : ['No failed section or check.'];
     if (kept.length < rows.length) table.push('', shortened(kept.length));
     return [...head, ...table, '', ...note, ...tail].join('\n');
   };
   const body = make(rows);
   if (body.length <= BODY_LIMIT) return body;
-  // Remove the excess and room for the shortened line. Each row takes its length and one "\n".
+  // Drop rows from the end. Make room for the shortened line. Each row takes its length and one "\n".
   let excess = body.length - BODY_LIMIT + 2 + shortened(rows.length).length;
-  const drop = rows.map(() => false);
-  // Drop pass rows first, then not-run, then record-only, each from the end of the table.
-  // A fail row (or an unknown result) goes only at the last step (null: any row), so the body always fits.
-  for (const result of ['pass', 'not-run', 'record-only', null]) {
-    for (let i = rows.length - 1; i >= 0 && excess > 0; i--) {
-      if (drop[i] || (result !== null && rows[i].result !== result)) continue;
-      drop[i] = true;
-      excess -= rows[i].line.length + 1;
-    }
-  }
-  return make(rows.filter((_, i) => !drop[i]));
+  let n = rows.length;
+  while (n > 0 && excess > 0) excess -= rows[--n].length + 1;
+  return make(rows.slice(0, n));
 }

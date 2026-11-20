@@ -38,11 +38,12 @@ The relay builds the issue only from the facts of the JSON block, and from the n
 - One line for each module: valid or not valid as evidence, with the reason codes. The line shows
   the `id` of the module when it has one. It shows the number of checks for each result that
   occurs, in the order `pass`, `fail`, `not-run`, `record-only`.
-- A table: module (with its `id`, if any), section or check, result, reason. The table comes from
-  the JSON, not from the Markdown part. If the body is longer than 65,536 characters, the relay
-  shortens the table and says so. It removes the `pass` rows first, then the `not-run` rows, then
-  the `record-only` rows. It keeps each `fail` row. In each step it starts at the end of the table.
-  Only when the `fail` rows alone are too long does it remove `fail` rows from the end.
+- A table of the failed rows: module (with its `id`, if any), section or check, result, reason. It has
+  one row for each section with the result `fail`, or for each check with the result `fail` when
+  the module has no sections. The table comes from the JSON, not from the Markdown part. If no row
+  has the result `fail`, the body has the line `No failed section or check.` and no table. If the
+  body is longer than 65,536 characters, the relay removes rows from the end of the table and says
+  so. The report file holds all checks.
 - The note as a quote, at most 2000 characters.
 - The link to the file, the SHA-256 and a hidden marker `<!-- skellycertify-report sha256:<hash> -->`.
 
@@ -402,7 +403,8 @@ Success: `HTTP 200`, `"duplicate":false` and a line `Issue: https://github.com/d
 1. Open the issue. Check that:
    - it has the labels `certify-report` and `relay-test`;
    - the first line says `Test of the relay`;
-   - the title, the module line and the table agree with `samples/valid.md`;
+   - the title and the module line agree with `samples/valid.md`. That sample has no `fail` row, so
+     the body has the line `No failed section or check.` and no table;
    - the author is your account (Part 2 changes this to the app).
 2. Click the link of the report file. GitHub shows `inbox/test/<sha256>.md` at one commit.
 3. Open `https://github.com/domisjustanumber/skellycertify/tree/inbox/inbox/test`. It holds the
