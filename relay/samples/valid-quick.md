@@ -21,10 +21,10 @@ Cameras: not checked on this system.
 
 Failed checks:
 
-| Module | Check | Reason |
-|---|---|---|
-| skellytracker | trt-rtx@10de-2484-0 | image-failed |
-| skellytracker | trt-rtx@10de-2484-0:image | output-mismatch |
+| Package | Module | Test | Reason |
+|---|---|---|---|
+| skellytracker | TensorRT RTX | trt-rtx@10de-2484-0 | image-failed |
+| skellytracker | TensorRT RTX | trt-rtx@10de-2484-0:image | output-mismatch |
 
 Note of the person:
 
@@ -34,7 +34,7 @@ Note of the person:
 
 ```json
 {
- "schema": "skellycertify.report/1.2.0",
+ "schema": "skellycertify.report/1.3.0",
  "app": {
   "name": "freemocap",
   "version": "2.0.0",
@@ -42,7 +42,7 @@ Note of the person:
  },
  "modules": [
   {
-   "schema": "skellycertify.report/1.2.0",
+   "schema": "skellycertify.report/1.3.0",
    "id": "3f2b8c1e-9a4d-4e7b-b6a1-0c5d2e8f7a90",
    "package": {
     "name": "skellytracker",
@@ -154,7 +154,7 @@ Note of the person:
    }
   },
   {
-   "schema": "skellycertify.report/1.2.0",
+   "schema": "skellycertify.report/1.3.0",
    "id": "c1d2e3f4-5a6b-4c7d-8e9f-a0b1c2d3e4f5",
    "package": {
     "name": "skellytracker",
@@ -210,6 +210,7 @@ Note of the person:
    "checks": [
     {
      "name": "trt-rtx@10de-2484-0",
+     "module": "TensorRT RTX",
      "result": "fail",
      "reason": "image-failed"
     },
@@ -220,6 +221,7 @@ Note of the person:
     },
     {
      "name": "trt-rtx@10de-2484-0:image",
+     "module": "TensorRT RTX",
      "result": "fail",
      "reason": "output-mismatch"
     },

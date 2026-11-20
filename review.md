@@ -64,7 +64,9 @@ Do these steps for each module report in `modules`. One module can be valid and 
    check never changes it. The report gives a `pass` or a `fail` also on a GPU whose hardware class
    does not list the execution provider, for example `directml` on a GPU that is not from AMD. Write
    the row as for each other pair. The row says only what the report measured for this EP, OS and
-   GPU. The catalog of the package decides if the pair is offered.
+   GPU. The catalog of the package decides if the pair is offered. A pair whose summary item has the
+   result `partial` or `skipped` gives no row. It is a record only
+   ([7.2](report-format.md#72-kinds-of-evidence)).
 
    A pair that uses a plugin pack needs two facts in `details.eps["<label>"]`, read from the
    installed pack: `installed_pack_version` and `wheels_match_lock`

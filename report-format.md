@@ -1,6 +1,6 @@
 # Report format
 
-**Status:** draft. Format version 1.2.0.
+**Status:** draft. Format version 1.3.0.
 
 This document is the contract between the freemocap packages, the freemocap app and this
 repository. Each package implements it in its own code. There is no shared code package.
@@ -143,6 +143,15 @@ a PyInstaller build.
 - A package may refuse the run when it can tell that the GPU is in use. It then returns the report
   with each check `not-run` and the reason `gpu-busy`. Its `evidence.reasons` holds `gpu-busy`.
 
+**Cameras in use.**
+
+- A package may refuse the run when it cannot get the cameras. It then returns the report with each
+  camera check `not-run` and the reason `cameras-busy`. Its `evidence.reasons` holds
+  `cameras-busy`.
+- One camera that another program holds, while the other cameras work, is not a refused run. The
+  checks of that camera are `not-run` with a reason code of the package. Its summary item is
+  `skipped` with the reason `busy` ([3.7](#37-summary)).
+
 **Time limits.**
 
 - Each check, or each child process that runs a group of checks, must have a time limit.
@@ -162,10 +171,18 @@ a PyInstaller build.
   keeps its result. It gets one more check `exit` with the result `record-only` and the reason
   `crashed`, `timed-out` or `hung-at-exit`.
 
+**Interrupted run.** The app or the process of the package can end before the run ends. The report
+is then written later from the stages that finished.
+
+- The check that ran when the process ended is `fail` with the reason `crashed`.
+- Each other check that did not end is `not-run` with the reason `interrupted`.
+- `evidence.reasons` holds `interrupted`.
+
 **Cleanup.**
 
 - The package must delete each file that it downloads and each package that it installs. This
-  rule also applies after a cancel, a crash or a time-out.
+  rule also applies after a cancel, a crash or a time-out. A file in the test media folder follows
+  the rules of [2.8](#28-the-test-media-folder).
 - The package must not remove a thing that was on the computer before the run.
 - The package may record its own results in its own store: its reports, its probe results, the
   answers of the person and a local pass. A local pass makes an item usable on that computer
@@ -198,7 +215,9 @@ It loads no GPU library and downloads nothing. It returns:
  "kind": "full",
  "seconds_estimate": 270,
  "downloads": [
-  {"name": "onnxruntime_ep_cuda13-0.2.0-py3-none-win_amd64.whl", "bytes": 1009000000}
+  {"name": "onnxruntime_ep_cuda13-0.2.0-py3-none-win_amd64.whl", "bytes": 1009000000,
+   "source": "https://example.org/packs/onnxruntime_ep_cuda13-0.2.0-py3-none-win_amd64.whl",
+   "sha256": "4abfaa7678817ed4a8ccb5f3e355ba28672589e8a3468bb6805e491dfe03a302"}
  ],
  "system_changes": [],
  "questions": []
@@ -208,7 +227,13 @@ It loads no GPU library and downloads nothing. It returns:
 `system_changes` holds one fixed sentence for each change outside the work folder, for example the
 install of a Windows ML package. `questions` holds the yes/no questions of the package, each with
 `section`, `id` and `text`. `seconds_estimate` is the time estimate of the run in whole seconds.
-Each item of `downloads` gives the file name and its size in bytes.
+Each item of `downloads` has `name` (the file name), `bytes` (the size in bytes), `source` (the
+https address that the file comes from) and `sha256` (64 lower-case hex digits). The address and
+the hash in the example are example values.
+
+- The package must check the SHA-256 of a file after the download.
+- The package must not use a file whose hash is wrong. The check that needs the file is then `fail`
+  with a reason code of the package.
 
 The app must show the plan of each package to the user. The app must get the consent of the user
 before it calls `certify()`. The app asks one time for all packages. After the run, the app asks
@@ -234,13 +259,35 @@ the files that its plan names, with the consent of the user ([2.6](#26-the-plan-
 take longer on the system. It can run full benchmarks. The owner can make these rules tighter
 later.
 
+The format has no rule for the order of the tests. We recommend this order: first the tests of most
+value and the tests of new things, then the tests of less value. A run that stops early then still
+gives the important results.
+
+### 2.8 The test media folder
+
+`certify()` and `certify_plan()` of each package must accept the keyword-only option
+`test_media_dir=None`. The app gives the location of one folder for each user. This folder is
+outside the data of each package.
+
+- A package keeps its test images and its benchmark recordings in this folder.
+- The name of each file is its SHA-256 in lower-case hex, followed by its extension. Two packages
+  that need the same file then share one copy.
+- A package must check the hash of a file before it uses the file.
+- A package must delete only a file that this run downloaded.
+- After a successful full run, the app removes by default each file that the run downloaded and
+  each file that the run wrote. The app never removes a file that was in the folder before the run.
+  The app never removes the report.
+- A package that gets no `test_media_dir` uses its own work folder, as before.
+- The path of the folder is never in a report (privacy rule 1 of [section 6](#6-privacy-rules)).
+- The folder is never in a repository.
+
 ## 3. The module report
 
 ### 3.1 Fields
 
 | Field | Type | Required | Meaning |
 |---|---|---|---|
-| `schema` | string | yes | `skellycertify.report/1.2.0` ([section 8](#8-versioning-of-the-format)). |
+| `schema` | string | yes | `skellycertify.report/1.3.0` ([section 8](#8-versioning-of-the-format)). |
 | `id` | string | no | A version 4 UUID in the lower-case form with hyphens (36 characters), for example `3f2b8c1e-9a4d-4e7b-b6a1-0c5d2e8f7a90`. The package gives it when it saves the report. It is unique in a report file. It holds no time and no data of the system. A version 1 UUID is forbidden, because it holds the MAC address. A report that was not saved can have no `id`. |
 | `package` | object | yes | See [3.2](#32-package). |
 | `kind` | string | yes | `quick`, `full` or `passive` ([7.2](#72-kinds-of-evidence)). `passive` is reserved for a record that the package gathers from normal use ([7.3](#73-the-passive-record-reserved)). Its fields are not yet defined. A writer must not write `passive` in this version. |
@@ -288,6 +335,7 @@ under `details`.
 | `name` | yes | The check name. It matches `^[A-Za-z0-9][A-Za-z0-9_.:@-]{0,127}$`. The pair (`section`, `name`) is unique. |
 | `result` | yes | `pass`, `fail`, `not-run` or `record-only` ([section 5](#5-results-and-reason-codes)). |
 | `reason` | yes | A reason code, or `null`. It must not be `null` for `fail` and `not-run`. |
+| `module` | no | The tested part, as a short label from the vocabulary of the package, for example `CUDA`. It uses the same names as the `name` of a summary item ([3.7](#37-summary)). At most 80 characters. |
 | `numbers` | no | A flat object of facts. Each value is a number, a boolean, `null`, a reason code, a list of reason codes, or a string from a fixed vocabulary of the package. It holds no free text. |
 
 ### 3.5 Section
@@ -297,6 +345,7 @@ under `details`.
 | `id` | yes | A short id, for example `"3"`. |
 | `name` | yes | The fixed name of the section. |
 | `result`, `reason` | yes | The section result. Any `fail` check makes `fail`. Else any `pass` check makes `pass`. Else any `record-only` check makes `record-only`. Else `not-run`. A section with no check, for example a section that crashed, has its own result and reason. |
+| `module` | no | The tested part, as for a check ([3.4](#34-check)). |
 | `summary` | no | One line for a person. The package makes it from fixed words and from the facts of the report only. |
 | `seconds`, `exit_code` | no | The time and the exit code of the child process of the section. |
 | `details` | no | Facts of the section. They obey [section 6](#6-privacy-rules). |
@@ -351,13 +400,15 @@ result `not-run`, with a reason such as `ep-not-installed`, `gpu-not-usable` or 
   `details.eps.<label>.gpu`. Two GPUs of one model have the same id.
 - `summary` ([3.7](#37-summary)) has one `ep` item for each pair that ran. A pair that is `not-run`
   has no item. The result of an `ep` item is the result of the row of the pair (`<label>`). The CPU
-  EP of a full report has no such row. skellytracker decides the result of its item.
+  EP of a full report has no such row. skellytracker decides the result of its item. A pair that
+  `quick` skips because it has a reviewed row has an `ep` item with the result `skipped` and the
+  reason `reviewed`.
 - skellytracker adds a `gpu-jpeg` item only when a GPU JPEG decode test ran for that pair.
   skellytracker decides the result of that item.
 
 ```json
 {
- "schema": "skellycertify.report/1.2.0",
+ "schema": "skellycertify.report/1.3.0",
  "id": "3f2b8c1e-9a4d-4e7b-b6a1-0c5d2e8f7a90",
  "package": {"name": "skellytracker", "version": "2.0.0", "commit": "0123456789abcdef0123456789abcdef01234567",
              "tree_modified": false},
@@ -480,17 +531,35 @@ person ([4.2](#42-layout)). It is not the `summary` of a section ([3.5](#35-sect
 
 | Field | Meaning |
 |---|---|
-| `group` | `ep`, `gpu-jpeg` or `camera`. |
-| `name` | A short fixed name from the vocabulary of the package, for example `TensorRT RTX`, `CUDA`, `DirectML` or `CPU`. For a camera, the camera model, for example `Logitech C922`. |
-| `device` | For `ep` and `gpu-jpeg`: the `id` of the GPU in `host.gpus`. For a PCI device this is `vvvv:dddd`. For `camera`: the USB id `vvvv:pppp`. Else `null`. |
-| `result` | `pass`, `fail` or `record-only`. |
+| `group` | `ep`, `gpu-jpeg`, `camera` or `benchmark`. |
+| `name` | A short fixed name from the vocabulary of the package, for example `TensorRT RTX`, `CUDA`, `DirectML` or `CPU`. For a camera, the camera model, for example `Logitech C922`. For `benchmark`, the tested part, as for `ep`. |
+| `device` | For `ep`, `gpu-jpeg` and `benchmark`: the `id` of the GPU in `host.gpus`. For a PCI device this is `vvvv:dddd`. For `camera`: the USB id `vvvv:pppp`. Else `null`. |
+| `result` | Not for `benchmark`. `pass`, `fail`, `record-only`, `partial` or `skipped`. |
+| `reason` | Not for `benchmark`. For `skipped`: `busy` or `reviewed`. For each other result: absent or `null`. |
+| `stage` | Only for `benchmark`. A short fixed name of the package for the measured stage. At most 80 characters. |
+| `ms_per_frame`, `fps` | Only for `benchmark`. Two numbers, each 0 or more: the time for one frame in milliseconds, and the frames for each second. |
+
+The results of an item:
+
+- `partial`: some checks of the item passed. Other checks could not run, or failed in a way that
+  is not fatal. Each group can use it.
+- `skipped`: the package did not test the item. The reason `busy` tells that another program holds
+  the camera or the GPU. The reason `reviewed` tells that the package skipped the item at the level
+  `quick` because the item already has a reviewed pass.
+
+A `benchmark` item has no `result` and no `reason`. The details of the measurement stay in
+`checks`.
 
 - The package that ran the checks fills `summary`. skellytracker gives the `ep` and `gpu-jpeg`
-  items ([3.6](#36-example-skellytracker)). skellycam gives the `camera` items.
+  items ([3.6](#36-example-skellytracker)). skellycam gives the `camera` items. Each package that
+  measures a benchmark gives its `benchmark` items.
 - A `gpu-jpeg` item has the same `name` and `device` as its `ep` item.
+- There is one `camera` item for each camera model on the system (USB vendor id and product id),
+  not for each unit. Two units of one model give one item. The count of units can be in `checks`. A
+  system with no camera has no `camera` item.
 - A writer of the report file prints the items. It does not compute them from `checks`.
-- A reader must accept a module with no `summary`. That module then gives no row to the GPU table
-  and no row to the camera table ([4.2](#42-layout)).
+- A reader must accept a module with no `summary`. That module then gives no row to the GPU table,
+  the benchmark table or the camera table ([4.2](#42-layout)).
 - Each item obeys the privacy rules of [section 6](#6-privacy-rules). A camera name holds no name of
   a person (rule 16).
 
@@ -502,7 +571,7 @@ One report file holds one JSON object:
 
 | Field | Meaning |
 |---|---|
-| `schema` | `skellycertify.report/1.2.0`. |
+| `schema` | `skellycertify.report/1.3.0`. |
 | `app` | `name`, `version` (SemVer) and `commit` of the app, or `null` for a report of one package that ran alone. |
 | `modules` | A list of module reports. The list holds at least one module report. A package can give more than one module report, for example one for each run. Each module report is independent ([7.1](#71-validity)). |
 | `note` | The one free-text note of the person, or `null`. At most 2000 characters. |
@@ -555,13 +624,16 @@ line between two parts:
      for each module: `- <package> <version> · <kind> run · valid as evidence`, or
      `not valid as evidence: <reasons>` at the end.
    - `<reasons>` is the list of `evidence.reasons`, separated by `, `.
+   - When `evidence.reasons` of a module holds `cancelled` or `interrupted`, the line of that module
+     has the word `incomplete` directly before the validity text, for example
+     `… · full run · incomplete · not valid as evidence: interrupted`.
 3. The system, as a list. The writer prints it one time for the whole file: `- OS: …`, `- CPU: …`,
    `- RAM: …`. It has no `- GPU:` line. It is never one list for each module. Each value comes from
    the first module in `modules` whose `host` has that key. The values are display names (see
    below). A line is absent when no module has its key.
 4. The GPU table: `| GPU | Module | Result |`. In this table, `Module` means the tested part (an EP or
-   a GPU decode), not a module report. The table of the failed checks (part 6) uses `Module` for the
-   package name.
+   a GPU decode), not a module report. The benchmark table (part 5) and the table of the failed
+   checks (part 7) use `Module` with the same meaning.
    - It has one row for each `ep` item ([3.7](#37-summary)). `GPU` is the display name of the GPU in
      `host.gpus` (of the same module report) whose `id` is equal to `device`, followed by the VRAM
      in whole GB when it is 1 GB or more, for example `NVIDIA RTX 3070 8 GB` or `Intel UHD 770`.
@@ -576,20 +648,29 @@ line between two parts:
      `not checked`. Each such GPU id has one row for the whole file.
    - The order is the order of `modules`, then of `summary`.
    - A file with no `ep` item and no GPU in any `host.gpus` has no GPU table.
-5. The cameras: a table `| Camera | Result |` with one row for each `camera` item. When no module
+5. Only when a module has a `benchmark` item: the benchmark table
+   `| GPU | Module | Stage | ms/frame | FPS |`. It has one row for each `benchmark` item, in the
+   order of `modules`, then of `summary`. `GPU` is as in the GPU table, and `-` when `device` is
+   `null`. `Module` is the `name` of the item. `Stage` is `stage`. `ms/frame` and `FPS` are
+   `ms_per_frame` and `fps` with one decimal place, for example `12.4`.
+6. The cameras: a table `| Camera | Result |` with one row for each `camera` item. When no module
    has a `camera` item, this part is the line `Cameras: not checked on this system.`
-6. Only when a check failed: the line `Failed checks:` and a table `| Module | Check | Reason |`. It
-   has one row for each section that has the result `fail`. When a module has no sections, it has
-   one row for each check that has the result `fail`. `Module` is the package name. `Check` is the
-   `name` of the section or of the check. `Reason` is the reason code.
-7. Only when `note` is not `null`: the line `Note of the person:` and the note as a quote. Each line
+7. Only when a check failed: the line `Failed checks:` and a table
+   `| Package | Module | Test | Reason |`. It has one row for each section that has the result
+   `fail`. When a module has no sections, it has one row for each check that has the result `fail`.
+   `Package` is the package name. `Module` is the `module` of the section or of the check, or an
+   empty cell when it has none. `Test` is the `name` of the section or of the check. `Reason` is the
+   reason code.
+8. Only when `note` is not `null`: the line `Note of the person:` and the note as a quote. Each line
    of the note starts with `> `.
-8. Last: the heading `## Data` and one fenced code block with the info string `json`. It holds
+9. Last: the heading `## Data` and one fenced code block with the info string `json`. It holds
    the object of [4.1](#41-content). The fence has at least 3 backticks. It is longer than each
    run of backticks in the JSON.
 
-The Markdown shows a result as `pass`, `fail` or `record`. `record` is the display of
-`record-only`. A writer prints the summary items. It does not compute them. The relay will show the
+The Markdown shows a result as `pass`, `fail`, `record`, `partial`, `skipped (busy)` or
+`skipped (already reviewed)`. `record` is the display of `record-only`. `skipped (busy)` is the
+display of `skipped` with the reason `busy`. `skipped (already reviewed)` is the display of
+`skipped` with the reason `reviewed`. A writer prints the summary items. It does not compute them. The relay will show the
 same summary in the issue, built from the JSON block and not from the Markdown
 ([open work](decisions/open-work.md)).
 
@@ -636,48 +717,49 @@ freemocap 2.0.0 · 2026-11-19 10:00 UTC
 
 | GPU | Module | Result |
 |---|---|---|
-| NVIDIA RTX 3070 8 GB | CUDA | pass |
-| NVIDIA RTX 3070 8 GB | CUDA GPU decode | pass |
+| NVIDIA RTX 3070 8 GB | CUDA | skipped (already reviewed) |
 | NVIDIA RTX 3070 8 GB | DirectML | pass |
 | - | CPU | record |
 | Intel UHD 770 | | not checked |
 
 | Camera | Result |
 |---|---|
-| Logitech C922 | pass |
-| Razer Kiyo Pro | fail |
+| Logitech C922 | partial |
+| Razer Kiyo Pro | skipped (busy) |
 
 Failed checks:
 
-| Module | Check | Reason |
-|---|---|---|
-| skellycam | open-camera | timed-out |
+| Package | Module | Test | Reason |
+|---|---|---|---|
+| skellycam | Logitech C922 | set-fps | timed-out |
 
 Note of the person:
 
-> The Razer camera works in other apps.
+> The Razer camera was open in another app.
 
 ## Data
 
 ```json
 {
- "schema": "skellycertify.report/1.2.0",
+ "schema": "skellycertify.report/1.3.0",
  "app": {"name": "freemocap", "version": "2.0.0", "commit": "89abcdef0123456789abcdef0123456789abcdef"},
  "modules": [
-  {"schema": "skellycertify.report/1.2.0", "package": {"name": "skellytracker", "...": "..."},
+  {"schema": "skellycertify.report/1.3.0", "package": {"name": "skellytracker", "...": "..."},
    "summary": [
-    {"group": "ep", "name": "CUDA", "device": "10de:2484", "result": "pass"},
-    {"group": "gpu-jpeg", "name": "CUDA", "device": "10de:2484", "result": "pass"},
+    {"group": "ep", "name": "CUDA", "device": "10de:2484", "result": "skipped", "reason": "reviewed"},
     {"group": "ep", "name": "DirectML", "device": "10de:2484", "result": "pass"},
     {"group": "ep", "name": "CPU", "device": null, "result": "record-only"}
    ]},
-  {"schema": "skellycertify.report/1.2.0", "package": {"name": "skellycam", "...": "..."},
+  {"schema": "skellycertify.report/1.3.0", "package": {"name": "skellycam", "...": "..."},
    "summary": [
-    {"group": "camera", "name": "Logitech C922", "device": "046d:085c", "result": "pass"},
-    {"group": "camera", "name": "Razer Kiyo Pro", "device": "1532:0e05", "result": "fail"}
+    {"group": "camera", "name": "Logitech C922", "device": "046d:085c", "result": "partial"},
+    {"group": "camera", "name": "Razer Kiyo Pro", "device": "1532:0e05", "result": "skipped", "reason": "busy"}
+   ],
+   "checks": [
+    {"name": "set-fps", "module": "Logitech C922", "result": "fail", "reason": "timed-out"}
    ]}
  ],
- "note": "The Razer camera works in other apps."
+ "note": "The Razer camera was open in another app."
 }
 ```
 ````
@@ -685,8 +767,9 @@ Note of the person:
 The `"...": "..."` items only make the example short. A real file holds each required field.
 The names, the ids and the results are examples. The system list shows one time for the whole file.
 The `host.gpus` of the modules (not shown) hold the RTX 3070 (`10de:2484`) and the Intel UHD 770
-(`8086:4688`). No `ep` item names the Intel UHD 770, so it has the row `not checked`. The skellycam values are examples. skellycam has no checks of this
-format yet.
+(`8086:4688`). No `ep` item names the Intel UHD 770, so it has the row `not checked`. The CUDA pair
+already has a reviewed pass, so the quick run skipped it. The skellycam values are examples.
+skellycam has no checks of this format yet.
 
 ## 5. Results and reason codes
 
@@ -718,6 +801,8 @@ This format owns these codes. Each package must use them with this meaning.
 | `hung-at-exit` | check `exit` | The child process did not end after its result. The package stopped it. |
 | `cancelled` | check, `evidence.reasons` | The caller set `cancel`. |
 | `gpu-busy` | check, `evidence.reasons` | The package refused the run because a pipeline holds the GPU. |
+| `cameras-busy` | check, `evidence.reasons` | The package refused the run because it cannot get the cameras. |
+| `interrupted` | check, `evidence.reasons` | The app or the process of the package ended before the run ended. The report was written later from the stages that finished. |
 | `not-selected` | check, section | The person or the caller did not select the check. |
 | `not-built` | check, section | The check does not exist in this version of the package yet. |
 | `no-version` | `evidence.reasons` | `package.version` is not a SemVer version. |
@@ -795,8 +880,9 @@ A module report is valid as evidence only when each of these statements is true:
 3. `package.tree_modified` is `false`. Else the reason is `modified-tree`. A module with
    `tree_modified: true` is a record only, because no commit identifies its source.
 4. The run selected each check of its level. Else the reason is `partial-run`.
-5. The run went to its end: the caller did not cancel it, and the package did not refuse it.
-   Else the reason is `cancelled` or `gpu-busy`. A cancelled run is not evidence.
+5. The run went to its end: the caller did not cancel it, the package did not refuse it, and the
+   process did not end early. Else the reason is `cancelled`, `gpu-busy`, `cameras-busy` or
+   `interrupted`. A cancelled run is not evidence.
 6. `kind` is `quick` or `full`. Else the reason is `kind-not-evidence`.
 7. Each rule of the package for its own evidence is true. The package adds its own codes to
    `evidence.reasons`, for example `packages-differ`.
@@ -825,6 +911,8 @@ A valid module report gives evidence by its `kind`:
 - A row from a `passive` record never replaces a row that a package requires from a maintainer.
   For example, skellytracker requires maintainer rows for an NVIDIA version bump.
 - A freemocap module of kind `full` is a record only until the level `full` of freemocap is built.
+- A summary item with the result `partial` or `skipped` never gives a reviewed row. The reviewer
+  treats it as a record.
 - The package that owns an evidence row gives its other rules for each kind. The reviewer reads
   those rules in the package.
 
@@ -862,6 +950,19 @@ the capture backend and the OS. Camera evidence is not part of an EP row.
 
 Changes of the format:
 
+- 1.3.0: A summary item can have the results `partial` and `skipped`, and a `skipped` item has the
+  field `reason` (`busy` or `reviewed`). The new group `benchmark` gives the benchmark table. A
+  check and a section can have the optional field `module`, and the table of the failed checks has
+  the columns `Package`, `Module`, `Test` and `Reason` ([3.7](#37-summary), [4.2](#42-layout)).
+  The common reason codes `cameras-busy` and `interrupted` are new, and the header shows
+  `incomplete` ([2.5](#25-runtime-rules), [5.3](#53-common-reason-codes)). The plan gives `source` and `sha256` for each
+  download, and the option `test_media_dir` gives the shared test media folder
+  ([2.6](#26-the-plan-function), [2.8](#28-the-test-media-folder)). There is one `camera` item for
+  each camera model ([3.7](#37-summary)). By the rules above, a new value of `result` changes the
+  meaning of a field, so it is a major change. The owner made it a minor change: the relay is the
+  only reader that checks the values, and it changed in the same step. Also, no report with
+  `summary` was accepted as evidence before this version. A reader of major version 1 still accepts
+  a file of 1.2.0, 1.1.0 or 1.0.0 ([ADR-D1PW](decisions/entries/D1PW-format-1-3-0.md)).
 - 1.2.0: A module report can have the optional field `summary` ([3.7](#37-summary)). The Markdown
   part has a new layout: a short summary for a person ([4.2](#42-layout)). A reader of major
   version 1 still accepts a file of 1.1.0 or 1.0.0, and a file in the earlier Markdown layout. The

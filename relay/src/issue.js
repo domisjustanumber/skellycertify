@@ -41,6 +41,10 @@ export const gigabytes = (bytes) => `${Math.round(bytes / 2 ** 30)} GB`;
 const gpusOf = (m) => (Array.isArray(m.host?.gpus) ? m.host.gpus.filter((g) => g !== null && typeof g === 'object') : []);
 const osOf = (m) => (str(m.host?.os?.label) ? osLabel(m.host.os.label) : str(m.host?.os?.name) ? m.host.os.name : undefined);
 
+// A check name of the format (3.4) holds no backtick, bar or space, so it is safe in a code span as it is.
+// It keeps its "@", which neutral() removes. Another name, for example of a section, goes through neutral().
+const testName = (v) => (/^[A-Za-z0-9_.:@-]{1,128}$/.test(String(v)) ? `\`${v}\`` : code(v, 128));
+
 export function buildTitle(data) {
   const first = data.modules[0];
   const who = data.app ?? first.package;
@@ -68,7 +72,8 @@ function validity(ev) {
 // kind is checked by report.js. With time: the header of one module with "app": null.
 function moduleLine(m, withTime) {
   const head = `${code(m.package.name, 60)} ${code(m.package.version, 60)}${m.id ? ` · id ${code(m.id, 36)}` : ''} · ${m.kind} run`;
-  return `${head}${withTime ? ` · ${when(m.created_utc)}` : ''} · ${validity(m.evidence)}`;
+  const incomplete = ['cancelled', 'interrupted'].some((r) => m.evidence.reasons.includes(r)) ? ' · incomplete' : '';
+  return `${head}${withTime ? ` · ${when(m.created_utc)}` : ''}${incomplete} · ${validity(m.evidence)}`;
 }
 
 function systemLines(data) {
@@ -83,11 +88,22 @@ function systemLines(data) {
   ].filter((l) => l !== null);
 }
 
-const RESULT = { __proto__: null, pass: 'pass', fail: 'fail', 'record-only': 'record' };
+const RESULT = { __proto__: null, pass: 'pass', fail: 'fail', 'record-only': 'record', partial: 'partial' };
+const SKIPPED = { __proto__: null, busy: 'skipped (busy)', reviewed: 'skipped (already reviewed)' };
+const shown = (it) => (it.result === 'skipped' ? SKIPPED[it.reason] : RESULT[it.result]) ?? code(it.result, 20);
+
+const itemsOf = (m) => (Array.isArray(m.summary) ? m.summary : []);
 
 function gpuCell(g) {
   const vram = Number.isFinite(g.vram_bytes) && g.vram_bytes >= 2 ** 30 ? ` ${gigabytes(g.vram_bytes)}` : '';
   return code(`${gpuName(g.name) || g.id}${vram}`, 100);
+}
+
+// The GPU cell of an item: the GPU of the same module report whose id is device, or "-" for null.
+function deviceCell(it, gpus) {
+  if (it.device === null) return '-';
+  const g = gpus.find((x) => x.id === it.device);
+  return g ? gpuCell(g) : code(it.device, 40);
 }
 
 // The GPU table of 4.2 part 4: the ep rows, each gpu-jpeg row under its ep row, then each GPU that
@@ -96,13 +112,9 @@ function gpuRows(data) {
   const rows = [];
   const named = new Set();
   for (const m of data.modules) {
-    const items = Array.isArray(m.summary) ? m.summary : [];
+    const items = itemsOf(m);
     const gpus = gpusOf(m);
-    const row = (it, label) => {
-      const g = it.device === null ? null : gpus.find((x) => x.id === it.device);
-      const cell = it.device === null ? '-' : g ? gpuCell(g) : code(it.device, 40);
-      return `| ${cell} | ${label} | ${RESULT[it.result] ?? code(it.result, 20)} |`;
-    };
+    const row = (it, label) => `| ${deviceCell(it, gpus)} | ${label} | ${shown(it)} |`;
     const same = (a, b) => a.name === b.name && a.device === b.device;
     // report.js allows at most 200 items in one module, so the nested loops stay small.
     for (const it of items) {
@@ -126,9 +138,14 @@ function gpuRows(data) {
   return rows;
 }
 
-const cameraRows = (data) => data.modules.flatMap((m) => (Array.isArray(m.summary) ? m.summary : [])
+// The benchmark table of 4.2 part 5. report.js checks that both figures are finite numbers.
+const benchmarkRows = (data) => data.modules.flatMap((m) => itemsOf(m)
+  .filter((it) => it.group === 'benchmark')
+  .map((it) => `| ${deviceCell(it, gpusOf(m))} | ${code(it.name, 80)} | ${code(it.stage, 80)} | ${it.ms_per_frame.toFixed(1)} | ${it.fps.toFixed(1)} |`));
+
+const cameraRows = (data) => data.modules.flatMap((m) => itemsOf(m)
   .filter((it) => it.group === 'camera')
-  .map((it) => `| ${code(it.name, 80)} | ${RESULT[it.result] ?? code(it.result, 20)} |`));
+  .map((it) => `| ${code(it.name, 80)} | ${shown(it)} |`));
 
 // One row for each failed section, or for each failed check when a module has no sections.
 function failedRows(data) {
@@ -137,7 +154,8 @@ function failedRows(data) {
     const name = `${code(m.package.name, 60)}${m.id ? ` ${code(m.id, 36)}` : ''}`;
     const hasSections = Array.isArray(m.sections);
     for (const r of (hasSections ? m.sections : m.checks).filter((x) => x.result === 'fail')) {
-      rows.push(`| ${name} | ${code(r.name, 128)} | ${code(r.reason, 80)} |`);
+      const mod = code(r.module, 80);
+      rows.push(`| ${name} |${mod ? ` ${mod} ` : ' '}| ${testName(r.name)} | ${code(r.reason, 80)} |`);
     }
   }
   return rows;
@@ -166,7 +184,7 @@ export function buildBody({ data, hash, filePath, fileUrl, testMode }) {
   const start = when(data.modules.map((m) => m.created_utc).sort()[0]);
   const lists = [
     single ? [moduleLine(data.modules[0], true)] : data.modules.map((m) => `- ${moduleLine(m, false)}`),
-    gpuRows(data), cameraRows(data), failedRows(data),
+    gpuRows(data), benchmarkRows(data), cameraRows(data), failedRows(data),
   ];
   const system = systemLines(data);
   const note = typeof data.note === 'string' && neutral(data.note, 10) ? ['Note of the person:', '', quote(data.note)] : [];
@@ -183,18 +201,19 @@ export function buildBody({ data, hash, filePath, fileUrl, testMode }) {
       ...rows(0),
       ...(more > 0 ? [`- and ${more} more modules (see the report file).`] : []),
     ];
-    const cameras = lists[2].length ? table(2, '| Camera | Result |') : ['Cameras: not checked on this system.'];
-    const failed = lists[3].length ? ['Failed checks:', '', ...table(3, '| Module | Check | Reason |')] : [];
+    const cameras = lists[3].length ? table(3, '| Camera | Result |') : ['Cameras: not checked on this system.'];
+    const failed = lists[4].length ? ['Failed checks:', '', ...table(4, '| Package | Module | Test | Reason |')] : [];
     return [
       testMode ? ['**Test of the relay.** This issue is never evidence.'] : [],
-      header, system, table(1, '| GPU | Module | Result |'), cameras, failed, note, tail,
+      header, system, table(1, '| GPU | Module | Result |'), table(2, '| GPU | Module | Stage | ms/frame | FPS |'),
+      cameras, failed, note, tail,
     ].filter((p) => p.length).map((p) => p.join('\n')).join('\n\n');
   };
   const kept = lists.map((l, i) => (i === 0 ? Math.min(l.length, MODULE_LINES) : l.length));
   let body = make(kept);
-  // Drop rows from the end: first the failed rows, then the cameras, the GPUs and the module lines.
-  // Each row takes its length and one "\n". CUT_ROOM makes room for the "shortened" line.
-  for (const i of [3, 2, 1, 0]) {
+  // Drop rows from the end: first the failed rows, then the benchmarks, the cameras, the GPUs and
+  // the module lines. Each row takes its length and one "\n". CUT_ROOM makes room for the "shortened" line.
+  for (const i of [4, 2, 3, 1, 0]) {
     if (body.length <= BODY_LIMIT) break;
     let excess = body.length - BODY_LIMIT + CUT_ROOM;
     while (kept[i] > 0 && excess > 0) excess -= lists[i][--kept[i]].length + 1;

@@ -44,23 +44,26 @@ of 4.2.
 - In test mode, the first line is `**Test of the relay.** This issue is never evidence.`
 - The header of 4.2. For one module with `"app": null`, it is one line. Else it is the app line and
   one list line for each module. Each module line shows the `id` of the module when it has one. It
-  shows at most 10 reason codes, then `and <n> more`. The body shows at most 100 module lines.
+  shows `incomplete` when `evidence.reasons` holds `cancelled` or `interrupted`. It shows at most
+  10 reason codes, then `and <n> more`. The body shows at most 100 module lines.
 - The system list: `- OS:`, `- CPU:` and `- RAM:`.
 - The GPU table `| GPU | Module | Result |`, from the `summary` items and `host.gpus`. A module
   with no `summary` (format 1.1.0 or earlier) gives no item rows. Each GPU that no `ep` item names
   has the result `not checked`. When no module has `summary`, that result is
-  `no summary in the report`, because the EPs of such a file can have run.
+  `no summary in the report`, because the EPs of such a file can have run. A result is `pass`,
+  `fail`, `record`, `partial`, `skipped (busy)` or `skipped (already reviewed)`.
+- Only when a module has a `benchmark` item: the table `| GPU | Module | Stage | ms/frame | FPS |`.
 - The camera table, or the line `Cameras: not checked on this system.`
 - Only when a section or a check failed: `Failed checks:` and the table
-  `| Module | Check | Reason |`. It has one row for each section with the result `fail`, or for
-  each check with the result `fail` when the module has no sections. The `Module` cell also shows
-  the `id` of the module.
+  `| Package | Module | Test | Reason |`. It has one row for each section with the result `fail`,
+  or for each check with the result `fail` when the module has no sections. The `Package` cell also
+  shows the `id` of the module. The `Module` cell is the `module` of the section or the check.
 - The note as a quote, at most 2000 characters.
 - The link to the file, the SHA-256 and a hidden marker `<!-- skellycertify-report sha256:<hash> -->`.
 
 If the body is longer than 65,536 characters, the relay removes rows from the end of the tables
-and says so. It removes the failed rows first, then the camera rows, the GPU rows and the module
-lines. The report file holds all rows.
+and says so. It removes the failed rows first, then the benchmark rows, the camera rows, the GPU
+rows and the module lines. The report file holds all rows.
 
 Each report string is untrusted. The relay removes each character that can start a mention, an
 issue link, HTML or a Markdown link (`@`, `#`, `<`, `>`, `[`, `]`, `!`, `|`, `` ` ``, `*` and
@@ -419,8 +422,8 @@ Success: `HTTP 200`, `"duplicate":false` and a line `Issue: https://github.com/d
    - it has the labels `certify-report` and `relay-test`;
    - the first line says `Test of the relay`;
    - the title is `[certify] FMC 2.0.0 · Win 11 26H2 · NVIDIA RTX 3070, Intel UHD 770`;
-   - the module line, the system list and the GPU table agree with the Markdown part of
-     `samples/valid.md`. That sample has no `fail` row, so the body has no `Failed checks:` table;
+   - the module line, the system list, the GPU table and the benchmark table agree with the
+     Markdown part of `samples/valid.md`. That sample has no `fail` row, so the body has no `Failed checks:` table;
    - the author is your account (Part 2 changes this to the app).
 2. Click the link of the report file. GitHub shows `inbox/test/<sha256>.md` at one commit.
 3. Open `https://github.com/domisjustanumber/skellycertify/tree/inbox/inbox/test`. It holds the

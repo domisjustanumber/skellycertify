@@ -18,7 +18,7 @@ test('the format sample is refused for its schema', () => {
 
 test('the reader takes the last json block, and a longer fence is allowed', () => {
   const text = '# Certify report\n\n```json\n{"x": 1}\n```\n\n````json\n' + JSON.stringify(validData()) + '\n````\n';
-  assert.equal(JSON.parse(splitReport(text).json).schema, 'skellycertify.report/1.2.0');
+  assert.equal(JSON.parse(splitReport(text).json).schema, 'skellycertify.report/1.3.0');
 });
 
 test('the file must end with the block and one newline', () => {
@@ -137,11 +137,73 @@ test('summary: optional; when present at most 200 items of the form of section 3
     [(m) => { m.summary[0].device = 'd'.repeat(41); }, 'bad-value', `${W}[0].device`],
     [(m) => delete m.summary[0].device, 'missing-field', `${W}[0].device`],
     [(m) => { m.summary[0].result = 'not-run'; }, 'bad-value', `${W}[0].result`],
+    [(m) => { m.summary[0].result = 'in-use'; }, 'bad-value', `${W}[0].result`],
   ];
   for (const [change, code, detail] of bad) {
     const d = validData();
     change(d.modules[0]);
     refused(reportFile(d), code, detail);
+  }
+});
+
+test('summary 1.3.0: partial, skipped with a reason, and benchmark items', () => {
+  const ok = [
+    (m) => { m.summary[0].result = 'partial'; },
+    (m) => { m.summary[0].result = 'partial'; m.summary[0].reason = null; },
+    (m) => { m.summary[0].result = 'skipped'; m.summary[0].reason = 'busy'; },
+    (m) => { m.summary[0].result = 'skipped'; m.summary[0].reason = 'reviewed'; },
+    (m) => { m.summary.push({ group: 'camera', name: 'Razer Kiyo Pro', device: '1532:0e05', result: 'skipped', reason: 'busy' }); },
+    (m) => { m.summary[4].ms_per_frame = 0; m.summary[4].fps = 0; m.summary[4].stage = 's'.repeat(80); },
+    (m) => { m.summary[4].result = 'whatever'; }, // a benchmark item has no result: a reader ignores it
+  ];
+  for (const change of ok) {
+    const d = validData();
+    change(d.modules[0]);
+    assert.ok(parseReport(reportFile(d)));
+  }
+  const W = 'report.modules[0].summary';
+  const bad = [
+    [(m) => { m.summary[0].result = 'skipped'; }, 'missing-field', `${W}[0].reason`],
+    [(m) => { m.summary[0].result = 'skipped'; m.summary[0].reason = null; }, 'bad-value', `${W}[0].reason`],
+    [(m) => { m.summary[0].result = 'skipped'; m.summary[0].reason = 'in-use'; }, 'bad-value', `${W}[0].reason`],
+    [(m) => { m.summary[0].reason = 'busy'; }, 'bad-value', `${W}[0].reason`],
+    [(m) => { m.summary[0].result = 'partial'; m.summary[0].reason = 'reviewed'; }, 'bad-value', `${W}[0].reason`],
+    [(m) => delete m.summary[4].stage, 'missing-field', `${W}[4].stage`],
+    [(m) => { m.summary[4].stage = ''; }, 'bad-value', `${W}[4].stage`],
+    [(m) => { m.summary[4].stage = 's'.repeat(81); }, 'bad-value', `${W}[4].stage`],
+    [(m) => delete m.summary[4].ms_per_frame, 'missing-field', `${W}[4].ms_per_frame`],
+    [(m) => { m.summary[4].ms_per_frame = -1; }, 'bad-value', `${W}[4].ms_per_frame`],
+    [(m) => { m.summary[4].ms_per_frame = '12.4'; }, 'bad-value', `${W}[4].ms_per_frame`],
+    [(m) => { m.summary[5].fps = null; }, 'bad-value', `${W}[5].fps`], // JSON has no Infinity or NaN
+    [(m) => delete m.summary[5].fps, 'missing-field', `${W}[5].fps`],
+    [(m) => { m.summary[4].device = 'd'.repeat(41); }, 'bad-value', `${W}[4].device`],
+  ];
+  for (const [change, code, detail] of bad) {
+    const d = validData();
+    change(d.modules[0]);
+    refused(reportFile(d), code, detail);
+  }
+});
+
+test('module: optional on a check and a section; when present a string of at most 80 characters', () => {
+  const ok = [
+    (m) => { m.checks[0].module = 'm'.repeat(80); },
+    (m) => { m.sections[0].module = 'CUDA'; },
+  ];
+  for (const change of ok) {
+    const d = validData();
+    change(d.modules[0]);
+    assert.ok(parseReport(reportFile(d)));
+  }
+  const bad = [
+    [(m) => { m.checks[0].module = 'm'.repeat(81); }, 'report.modules[0].checks[0].module'],
+    [(m) => { m.checks[0].module = null; }, 'report.modules[0].checks[0].module'],
+    [(m) => { m.sections[1].module = 3; }, 'report.modules[0].sections[1].module'],
+  ];
+  for (const [change, detail] of bad) {
+    const d = validData();
+    change(d.modules[0]);
+    refused(reportFile(d), 'bad-value', detail);
   }
 });
 

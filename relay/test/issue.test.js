@@ -105,6 +105,11 @@ test('the body of the valid sample is the summary of 4.2, with the link and the 
     '| - | `CPU` | pass |',
     '| `Intel UHD 770` | | not checked |',
     '',
+    '| GPU | Module | Stage | ms/frame | FPS |',
+    '|---|---|---|---|---|',
+    '| `NVIDIA RTX 3070 8 GB` | `CUDA` | `pipeline-1` | 12.4 | 80.6 |',
+    '| - | `CPU` | `pipeline-1` | 95.0 | 10.5 |',
+    '',
     'Cameras: not checked on this system.',
     '',
     'Note of the person:',
@@ -130,7 +135,7 @@ test('one module with app null: one header line with the time; failed sections m
   const body = buildBody(args(d));
   const reasons = Array.from({ length: 10 }, (_, i) => `\`r${i}\``).join(', ');
   assert.ok(body.startsWith(`\`skellytracker\` \`2.0.0\` · id \`${ID_A}\` · full run · 2026-11-19 10:00 UTC · not valid as evidence: ${reasons} and 2 more\n\n- OS:`));
-  assert.ok(body.includes(`Failed checks:\n\n| Module | Check | Reason |\n|---|---|---|\n| \`skellytracker\` \`${ID_A}\` | \`Checkout and versions\` | \`check-failed\` |\n\n`));
+  assert.ok(body.includes(`Failed checks:\n\n| Package | Module | Test | Reason |\n|---|---|---|---|\n| \`skellytracker\` \`${ID_A}\` | | \`Checkout and versions\` | \`check-failed\` |\n\n`));
   assert.doesNotMatch(body, /Note of the person/);
   d.modules[0].evidence = { valid: false, reasons: [] };
   assert.match(buildBody(args(d)), / · not valid as evidence\n/);
@@ -141,8 +146,58 @@ test('checks make the failed rows when a module has no sections', () => {
   delete d.modules[0].sections;
   d.modules[0].checks[0].result = 'fail';
   d.modules[0].checks[0].reason = 'timed-out';
+  d.modules[0].checks[5].result = 'fail';
+  d.modules[0].checks[5].reason = 'crashed';
   const rows = buildBody(args(d)).split('\n').filter((l) => l.startsWith('| `skellytracker`'));
-  assert.deepEqual(rows, ['| `skellytracker` | `checkout` | `timed-out` |']);
+  assert.deepEqual(rows, ['| `skellytracker` | | `checkout` | `timed-out` |', '| `skellytracker` | `CUDA` | `cuda` | `crashed` |']);
+});
+
+test('summary results of 1.3.0 have their display words', () => {
+  const d = validData();
+  d.modules[0].summary = [
+    { group: 'ep', name: 'CUDA', device: '10de:2484', result: 'skipped', reason: 'reviewed' },
+    { group: 'gpu-jpeg', name: 'CUDA', device: '10de:2484', result: 'partial' },
+    { group: 'ep', name: 'DirectML', device: '10de:2484', result: 'skipped', reason: 'busy' },
+    { group: 'camera', name: 'Logitech C922', device: '046d:085c', result: 'partial' },
+    { group: 'camera', name: 'Razer Kiyo Pro', device: '1532:0e05', result: 'skipped', reason: 'busy' },
+  ];
+  const body = buildBody(args(d));
+  assert.ok(body.includes([
+    '| `NVIDIA RTX 3070 8 GB` | `CUDA` | skipped (already reviewed) |',
+    '| `NVIDIA RTX 3070 8 GB` | `CUDA` GPU decode | partial |',
+    '| `NVIDIA RTX 3070 8 GB` | `DirectML` | skipped (busy) |',
+  ].join('\n')));
+  assert.ok(body.includes('| `Logitech C922` | partial |\n| `Razer Kiyo Pro` | skipped (busy) |'));
+  assert.doesNotMatch(body, /\| GPU \| Module \| Stage/, 'no benchmark item: no benchmark table');
+});
+
+test('benchmark table: GPU cell as in the GPU table, figures with one decimal place', () => {
+  const d = validData();
+  d.modules[0].summary = [
+    { group: 'benchmark', name: 'DirectML', device: '8086:4688', stage: 'pose', ms_per_frame: 33.333, fps: 30 },
+    { group: 'benchmark', name: 'CUDA', device: '10de:9999', stage: 'detect', ms_per_frame: 0, fps: 1234.56 },
+  ];
+  const lines = buildBody(args(d)).split('\n');
+  const i = lines.indexOf('| GPU | Module | Stage | ms/frame | FPS |');
+  assert.ok(lines[i - 2].endsWith('| not checked |'), 'directly after the GPU table');
+  assert.deepEqual(lines.slice(i + 1, i + 5), [
+    '|---|---|---|---|---|',
+    '| `Intel UHD 770` | `DirectML` | `pose` | 33.3 | 30.0 |',
+    '| `10de:9999` | `CUDA` | `detect` | 0.0 | 1234.6 |',
+    '',
+  ]);
+});
+
+test('a cancelled or interrupted module is incomplete in its header line', () => {
+  const d = validData();
+  d.app = null;
+  d.modules[0].evidence = { valid: false, reasons: ['interrupted'] };
+  assert.match(buildBody(args(d)), /^`skellytracker` `2\.0\.0` · full run · 2026-11-19 10:00 UTC · incomplete · not valid as evidence: `interrupted`\n/);
+  const e = validData();
+  e.modules.push({ ...validData().modules[0], evidence: { valid: false, reasons: ['modified-tree', 'cancelled'] } });
+  const body = buildBody(args(e));
+  assert.match(body, /^- `skellytracker` `2\.0\.0` · full run · valid as evidence$/m);
+  assert.match(body, /^- `skellytracker` `2\.0\.0` · full run · incomplete · not valid as evidence: `modified-tree`, `cancelled`$/m);
 });
 
 test('a module with no summary (format 1.1.0) gives no item rows; its GPUs are listed with no result', () => {
@@ -186,6 +241,8 @@ test('hostile report strings are neutral in the body; only the relay marker is H
   d.modules[0].host.gpus[1].name = HOSTILE.join(' ');
   d.modules[0].summary.push(...HOSTILE.map((name) => ({ group: 'camera', name, device: name, result: 'pass' })));
   d.modules[0].summary.push({ group: 'ep', name: HOSTILE[2], device: HOSTILE[5], result: 'pass' });
+  d.modules[0].summary.push(...HOSTILE.map((name) => ({ group: 'benchmark', name, device: name, stage: name, ms_per_frame: 1, fps: 1 })));
+  d.modules[0].sections[0].module = HOSTILE.join(' ');
   d.note = HOSTILE.join('\n');
   const body = buildBody(args(d));
   const withoutMarker = body.replace(marker(HASH), '').replace(/^> /gm, ''); // the relay's own quote prefix
@@ -221,13 +278,14 @@ test('a hostile, very large report still gives a body within the limit', () => {
     id: ID_A,
     package: { name: long('p', 500), version: long('v', 500) },
     sections: undefined,
-    checks: k === 0 ? Array.from({ length: 5000 }, (_, i) => ({ name: `${i}${long('c', 127 - String(i).length)}`, result: 'fail', reason: long('r', 80) })) : [],
-    evidence: { valid: false, reasons: Array.from({ length: 50 }, () => long('e', 80)) },
+    checks: k === 0 ? Array.from({ length: 5000 }, (_, i) => ({ name: `${i}${long('c', 127 - String(i).length)}`, module: long('m', 80), result: 'fail', reason: long('r', 80) })) : [],
+    evidence: { valid: false, reasons: ['interrupted', ...Array.from({ length: 50 }, () => long('e', 80))] },
     host: { os: { label: long('o', 5000) }, cpu: { name: long('u', 5000) }, memory_bytes: 1e300,
       gpus: Array.from({ length: 200 }, (_, i) => ({ name: long('g', 2000), id: `${k}-${i}`, vram_bytes: 1e300 })) },
-    summary: Array.from({ length: 200 }, (_, i) => ({ group: ['ep', 'gpu-jpeg', 'camera'][i % 3], name: long('n', 80), device: long('d', 40), result: 'pass' })),
+    summary: Array.from({ length: 200 }, (_, i) => ({ group: ['ep', 'gpu-jpeg', 'camera', 'benchmark'][i % 4], name: long('n', 80), device: long('d', 40),
+      result: 'skipped', reason: 'reviewed', stage: long('s', 80), ms_per_frame: 1e300, fps: Number.MAX_VALUE })),
   });
-  const d = { schema: 'skellycertify.report/1.2.0', app: { name: long('a', 5000), version: long('b', 5000) },
+  const d = { schema: 'skellycertify.report/1.3.0', app: { name: long('a', 5000), version: long('b', 5000) },
     modules: Array.from({ length: 150 }, (_, k) => module(k)), note: long('x\n', 3000) };
   d.modules.forEach((m) => delete m.sections);
   const body = buildBody(args(d, true));
@@ -263,4 +321,11 @@ test('a file with no summary does not say that a GPU is not checked', () => {
   const args = { hash: 'a'.repeat(64), filePath: 'inbox/x.md', fileUrl: 'https://example.invalid/x.md', testMode: false };
   assert.match(buildBody({ ...args, data: { app: null, modules: [m], note: null } }), /\| \| no summary in the report \|/);
   assert.match(buildBody({ ...args, data: { app: null, modules: [{ ...m, summary: [] }], note: null } }), /\| \| not checked \|/);
+});
+
+test('the Test cell of a failed check keeps the @ of the check name, inside a code span', () => {
+  const m = { package: { name: 'p', version: '1.0.0' }, kind: 'full', created_utc: '2026-11-20T00:00:00Z', evidence: { valid: true, reasons: [] }, host: {},
+    checks: [{ name: 'cuda@10de-2484-0:jpeg', result: 'fail', reason: 'timed-out' }] };
+  const body = buildBody({ hash: 'a'.repeat(64), filePath: 'inbox/x.md', fileUrl: 'https://example.invalid/x.md', testMode: false, data: { app: null, modules: [m], note: null } });
+  assert.ok(body.includes('| `cuda@10de-2484-0:jpeg` | `timed-out` |'));
 });

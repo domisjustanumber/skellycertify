@@ -16,8 +16,9 @@ const CHECK_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9_.:@-]{0,127}$/;
 const ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/; // a version 4 UUID in lower case
 const KINDS = ['quick', 'full', 'passive'];
 export const RESULTS = ['pass', 'fail', 'not-run', 'record-only'];
-const SUMMARY_GROUPS = ['ep', 'gpu-jpeg', 'camera'];
-const SUMMARY_RESULTS = ['pass', 'fail', 'record-only'];
+const SUMMARY_GROUPS = ['ep', 'gpu-jpeg', 'camera', 'benchmark'];
+const SUMMARY_RESULTS = ['pass', 'fail', 'record-only', 'partial', 'skipped'];
+const SKIP_REASONS = ['busy', 'reviewed'];
 const SUMMARY_ITEMS = 200; // a limit of the relay, so that the issue body stays small
 
 // Split the file into the Markdown part and the JSON text of the last fenced `json` block.
@@ -52,6 +53,8 @@ function need(obj, key, where, test = () => true, badCode = 'bad-value') {
 
 const str = (v) => typeof v === 'string';
 const strOrNull = (v) => v === null || typeof v === 'string';
+const short = (v) => str(v) && [...v].length <= 80;
+const figure = (v) => Number.isFinite(v) && v >= 0;
 
 function checkRow(row, where, hasSections, isCleanup) {
   if (!isObj(row)) throw new Refused('bad-value', where);
@@ -59,6 +62,7 @@ function checkRow(row, where, hasSections, isCleanup) {
   need(row, 'name', where, (v) => str(v) && CHECK_NAME_RE.test(v));
   const result = need(row, 'result', where, (v) => RESULTS.includes(v));
   need(row, 'reason', where, (v) => strOrNull(v) && !(v === null && (result === 'fail' || result === 'not-run')));
+  if ('module' in row) need(row, 'module', where, short);
 }
 
 function checkModule(m, where) {
@@ -85,16 +89,25 @@ function checkModule(m, where) {
       need(s, 'name', w, str);
       need(s, 'result', w, (v) => RESULTS.includes(v));
       need(s, 'reason', w, strOrNull);
+      if ('module' in s) need(s, 'module', w, short);
     });
   }
   if ('summary' in m) { // section 3.7
     need(m, 'summary', where, (v) => Array.isArray(v) && v.length <= SUMMARY_ITEMS).forEach((s, i) => {
       const w = `${where}.summary[${i}]`;
       if (!isObj(s)) throw new Refused('bad-value', w);
-      need(s, 'group', w, (v) => SUMMARY_GROUPS.includes(v));
-      need(s, 'name', w, (v) => str(v) && v.length > 0 && [...v].length <= 80);
+      const group = need(s, 'group', w, (v) => SUMMARY_GROUPS.includes(v));
+      need(s, 'name', w, (v) => short(v) && v.length > 0);
       need(s, 'device', w, (v) => v === null || (str(v) && [...v].length <= 40));
-      need(s, 'result', w, (v) => SUMMARY_RESULTS.includes(v));
+      if (group === 'benchmark') { // no result and no reason
+        need(s, 'stage', w, (v) => short(v) && v.length > 0);
+        need(s, 'ms_per_frame', w, figure);
+        need(s, 'fps', w, figure);
+      } else if (need(s, 'result', w, (v) => SUMMARY_RESULTS.includes(v)) === 'skipped') {
+        need(s, 'reason', w, (v) => SKIP_REASONS.includes(v));
+      } else if ('reason' in s) {
+        need(s, 'reason', w, (v) => v === null);
+      }
     });
   }
   if ('cleanup' in m) {
