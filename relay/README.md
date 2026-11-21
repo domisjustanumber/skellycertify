@@ -230,6 +230,9 @@ Choose the subdomain now. Use only lowercase letters, digits and hyphens. You do
 the dashboard. Wrangler creates it at the first deploy, in
 [step 11](#11-deploy).
 
+If the **Workers & Pages** page already shows **Your subdomain**, the account has one. If it
+identifies you, select **Change** next to **Your subdomain** and type the neutral word.
+
 Success: the **Workers & Pages** page opens and you have chosen a subdomain.
 
 ## 5. Install the tools
