@@ -19,6 +19,10 @@ export const RESULTS = ['pass', 'fail', 'not-run', 'record-only'];
 const SUMMARY_GROUPS = ['ep', 'gpu-jpeg', 'camera', 'benchmark', 'component'];
 const SUMMARY_RESULTS = ['pass', 'fail', 'record-only', 'partial', 'skipped'];
 const SKIP_REASONS = ['busy', 'reviewed'];
+const COMPONENT_SKIP_REASONS = [...SKIP_REASONS, 'not-installed']; // 3.7: not-installed only for a component item
+const TEST_MEDIA = 50; // section 3.9
+const SOURCES = ['bundled', 'shared'];
+const SHA256_RE = /^[0-9a-f]{64}$/;
 const SUMMARY_ITEMS = 200; // a limit of the relay, so that the issue body stays small
 const CODE_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/; // the pattern of a reason code (section 5.2)
 const NOTICES = 50; // section 3.8
@@ -61,6 +65,7 @@ const figure = (v) => Number.isFinite(v) && v >= 0;
 const upTo = (n) => (v) => str(v) && [...v].length <= n;
 const strOrNum = (v) => str(v) || Number.isFinite(v);
 const orNull = (test) => (v) => v === null || test(v);
+const count = (v) => Number.isInteger(v) && v >= 0;
 const GPUS = 16; // a limit of the relay, so that the issue stays small
 const OS_FIELDS = ['name', 'release', 'version', 'build', 'label', 'arch'];
 
@@ -81,6 +86,7 @@ function checkHost(host, where) {
       need(g, 'id', w, upTo(40));
       for (const f of ['vendor', 'driver_version']) if (f in g) need(g, f, w, strOrNull);
       if ('vram_bytes' in g) need(g, 'vram_bytes', w, orNull(figure));
+      if ('shared_memory_bytes' in g) need(g, 'shared_memory_bytes', w, orNull(count));
     });
   }
 }
@@ -136,7 +142,7 @@ function checkModule(m, where, year) {
         need(s, 'fps', w, figure);
       } else {
         if (need(s, 'result', w, (v) => SUMMARY_RESULTS.includes(v)) === 'skipped') {
-          need(s, 'reason', w, (v) => SKIP_REASONS.includes(v));
+          need(s, 'reason', w, (v) => (group === 'component' ? COMPONENT_SKIP_REASONS : SKIP_REASONS).includes(v));
         } else if ('reason' in s) {
           need(s, 'reason', w, (v) => v === null);
         }
@@ -153,6 +159,16 @@ function checkModule(m, where, year) {
         need(n, 'values', w, (v) => isObj(v) && Object.keys(v).length <= NOTICE_VALUES
           && Object.values(v).every((x) => Number.isFinite(x) || short(x)));
       }
+    });
+  }
+  if ('test_media' in m) { // section 3.9: a file name, never a path
+    need(m, 'test_media', where, (v) => Array.isArray(v) && v.length <= TEST_MEDIA).forEach((t, i) => {
+      const w = `${where}.test_media[${i}]`;
+      if (!isObj(t)) throw new Refused('bad-value', w);
+      need(t, 'name', w, (v) => upTo(120)(v) && v.length > 0 && !/[\\/]/.test(v));
+      need(t, 'sha256', w, (v) => str(v) && SHA256_RE.test(v));
+      need(t, 'bytes', w, count);
+      need(t, 'source', w, (v) => SOURCES.includes(v));
     });
   }
   if ('cleanup' in m) {

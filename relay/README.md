@@ -56,7 +56,8 @@ of 4.2.
   with no `summary` (format 1.1.0 or earlier) gives no item rows. Each GPU that no `ep` item names
   has the result `not checked`. When no module has `summary`, that result is
   `no summary in the report`, because the EPs of such a file can have run. A result is `pass`,
-  `fail`, `record`, `partial`, `skipped (busy)` or `skipped (already reviewed)`.
+  `fail`, `record`, `partial`, `skipped (busy)`, `skipped (already reviewed)` or
+  `skipped (not installed)`. Only a `component` item can have `skipped (not installed)`.
 - Only when a module has a `benchmark` item: the table `| GPU | Module | Stage | ms/frame | FPS |`.
 - Only when a module has a `component` item: the table `| Module | Result |` of 4.2 part 6, with
   one row for each `component` item. A `component` item must have `device` `null`.
@@ -73,7 +74,9 @@ of 4.2.
 - The link to the file, the SHA-256 and a hidden marker `<!-- skellycertify-report sha256:<hash> -->`.
 
 The body does not show `notices` ([report-format.md 3.8](../report-format.md#38-notices)). They are
-for the person at the app. The relay checks their form only.
+for the person at the app. The relay checks their form only. The body also does not show
+`test_media` ([report-format.md 3.9](../report-format.md#39-test_media)) or
+`shared_memory_bytes` of `host.gpus`. The relay checks their form only.
 
 If the body is longer than 65,536 characters, the relay removes rows from the end of the tables
 and says so. It removes the rows of the checks that did not pass first, then the benchmark rows, the component rows, the

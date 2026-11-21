@@ -9,12 +9,6 @@ task. Delete an item when its work is done. The PR that closes an item records t
 - **The relay: turn off the test mode.** The live relay runs in test mode since 2026-11-20 for the
   first hand-ins from freemocap. No report counts as evidence while it is on. Set `TEST_MODE` to
   `"false"` in `relay/wrangler.jsonc` and deploy, with the approval of the owner.
-- **The relay: deploy and switch on ([ADR-V1TR](entries/V1TR-format-1-4-0.md),
-  [ADR-MM1F](entries/MM1F-relay-hardened-after-security-review.md),
-  [ADR-VV80](entries/VV80-format-1-5-0.md)).** The live relay is switched off since 2026-11-20. It
-  does not have the code of format 1.4.0, of the hardening and of format 1.5.0 yet. Deploy
-  the relay and switch it on, with the approval of the owner. Before volunteers use it, add the
-  branch rule on `main` of `relay/README.md` Part 2 step 7.
 - **freemocap: the clean note and the content type
   ([ADR-MM1F](entries/MM1F-relay-hardened-after-security-review.md)).** Before the app shows the
   file to the person, the app must make the note clean (rule 18 of
@@ -58,6 +52,23 @@ task. Delete an item when its work is done. The PR that closes an item records t
 - **Each package: the schema id of format 1.5.0 ([ADR-VV80](entries/VV80-format-1-5-0.md)).**
   skellytracker, skellycam and freemocap must write the schema id `skellycertify.report/1.5.0`, not
   `skellycertify.report/1.4.0`, when they write the rules of format 1.5.0.
+- **Each package: write format 1.6.0 ([ADR-9FHP](entries/9FHP-format-1-6-0.md)).** skellytracker,
+  skellycam and freemocap must accept the keyword-only option `abandon` of `certify()`
+  ([2.4](../report-format.md#24-cancel)). They must write `test_media` for each test media file
+  that the checks used ([3.9](../report-format.md#39-test_media)). They must write the schema id
+  `skellycertify.report/1.6.0`, not `skellycertify.report/1.5.0`, when they write the rules of
+  format 1.6.0.
+- **skellytracker: the GPU memory and the bundled test media
+  ([ADR-9FHP](entries/9FHP-format-1-6-0.md)).** Write `shared_memory_bytes` in each item of
+  `host.gpus` ([3.3](../report-format.md#33-host)). When the test media folder does not hold a
+  file, use the bundled copy and write `source` `bundled`
+  ([2.8](../report-format.md#28-the-test-media-folder)).
+- **freemocap: the app side of format 1.6.0 ([ADR-9FHP](entries/9FHP-format-1-6-0.md)).** Set
+  `abandon` for a package process that has no caller after the backend ended early
+  ([2.4](../report-format.md#24-cancel)). Give the `component` item of Blender the result `skipped`
+  with `not-installed` when Blender is not installed ([3.7](../report-format.md#37-summary)). Give
+  a file with more than one report of one package the oldest `created_utc` in its name and its
+  header line ([4.2](../report-format.md#42-layout)).
 - **skellytracker: write format 1.3.0
   ([ADR-F1KN](entries/F1KN-format-1-2-0-markdown-layout-revised.md),
   [ADR-D1PW](entries/D1PW-format-1-3-0.md)).** In the module report of `certify()`, fill `summary`

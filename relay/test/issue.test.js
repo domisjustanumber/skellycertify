@@ -294,6 +294,25 @@ test('component table 1.5.0: directly after the benchmark table, the display wor
   assert.equal(body[body.indexOf('| Module | Result |') - 2], '| `Intel UHD 770` | | not checked |', 'no benchmark table: after the GPU table');
 });
 
+test('1.6.0: skipped (not installed) for a component; test_media and shared_memory_bytes do not print', () => {
+  const d = validData();
+  d.modules[0].summary.push({ group: 'component', name: 'Blender', device: null, result: 'skipped', reason: 'not-installed' });
+  d.modules[0].test_media = [{ name: 'quick_frames.zip', sha256: 'f'.repeat(64), bytes: 6215661, source: 'bundled' }];
+  d.modules[0].host.gpus[0].shared_memory_bytes = 34194001920;
+  const body = buildBody(args(d));
+  assert.ok(body.includes('| `Blender` | skipped (not installed) |'));
+  assert.doesNotMatch(body, /quick_frames|f{64}|6215661|34194001920|bundled/);
+  assert.equal(body.replace('| Module | Result |\n|---|---|\n| `Blender` | skipped (not installed) |\n\n', ''), buildBody(args(validData())));
+});
+
+test('the header time of a file with two or more modules is the oldest created_utc (4.2)', () => {
+  const d = validData();
+  d.modules.push({ ...validData().modules[0], created_utc: '2026-11-18T23:05:00Z' }, { ...validData().modules[0], created_utc: '2026-11-20T08:00:00Z' });
+  assert.match(buildBody(args(d)), /^`freemocap` `2\.0\.0` · 2026-11-18 23:05 UTC\n/);
+  d.app = null;
+  assert.match(buildBody(args(d)), /^2026-11-18 23:05 UTC\n/);
+});
+
 test('rule 20: a four-part number in a value prints with spaces, as the writer prints it in the file', () => {
   assert.equal(neutral('Camera 2.1.0.5 rev'), 'Camera 2 1 0 5 rev');
   assert.equal(neutral('1.2.3.4.5.6.7'), '1 2 3 4 5 6 7', 'again until no match is left');

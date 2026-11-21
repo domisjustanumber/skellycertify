@@ -239,6 +239,61 @@ test('component 1.5.0: the fields of an ep item, the device must be null', () =>
   }
 });
 
+test('not-installed 1.6.0: a reason of skipped only for a component item', () => {
+  const d = validData();
+  d.modules[0].summary.push({ group: 'component', name: 'Blender', device: null, result: 'skipped', reason: 'not-installed' });
+  assert.ok(parse(reportFile(d)));
+  const W = 'report.modules[0].summary[0]';
+  for (const change of [
+    (m) => { m.summary[0].result = 'skipped'; m.summary[0].reason = 'not-installed'; }, // an ep item
+    (m) => { m.summary[0] = { group: 'camera', name: 'Logitech C922', device: '046d:085c', result: 'skipped', reason: 'not-installed' }; },
+    (m) => { m.summary[0] = { group: 'component', name: 'Blender', device: null, result: 'pass', reason: 'not-installed' }; },
+  ]) {
+    const e = validData();
+    change(e.modules[0]);
+    refused(reportFile(e), 'bad-value', `${W}.reason`);
+  }
+});
+
+test('test_media 1.6.0: optional; at most 50 items of name, sha256, bytes and source (section 3.9)', () => {
+  const item = { name: 'quick_frames.zip', sha256: 'a973456f417eab8e24ea8aa3f118a48142aa55143af69c73ee6799cb4f94c1f4', bytes: 6215661, source: 'bundled' };
+  const ok = [
+    (m) => { m.test_media = []; },
+    (m) => { m.test_media = [item, { ...item, source: 'shared', bytes: 0, extra: 1 }]; },
+    (m) => { m.test_media = Array.from({ length: 50 }, () => ({ ...item, name: 'n'.repeat(120) })); },
+  ];
+  for (const change of ok) {
+    const d = validData();
+    change(d.modules[0]);
+    assert.ok(parse(reportFile(d)));
+  }
+  const W = 'report.modules[0].test_media';
+  const bad = [
+    [(m) => { m.test_media = {}; }, 'bad-value', W],
+    [(m) => { m.test_media = null; }, 'bad-value', W],
+    [(m) => { m.test_media = Array.from({ length: 51 }, () => item); }, 'bad-value', W],
+    [(m) => { m.test_media = ['quick_frames.zip']; }, 'bad-value', `${W}[0]`],
+    [(m) => { m.test_media = [{ ...item, name: undefined }]; }, 'missing-field', `${W}[0].name`],
+    [(m) => { m.test_media = [{ ...item, name: '' }]; }, 'bad-value', `${W}[0].name`],
+    [(m) => { m.test_media = [{ ...item, name: 'n'.repeat(121) }]; }, 'bad-value', `${W}[0].name`],
+    [(m) => { m.test_media = [{ ...item, name: 'media/quick_frames.zip' }]; }, 'bad-value', `${W}[0].name`],
+    [(m) => { m.test_media = [{ ...item, name: 'media\\quick_frames.zip' }]; }, 'bad-value', `${W}[0].name`],
+    [(m) => { m.test_media = [{ ...item, sha256: item.sha256.toUpperCase() }]; }, 'bad-value', `${W}[0].sha256`],
+    [(m) => { m.test_media = [{ ...item, sha256: 'a'.repeat(63) }]; }, 'bad-value', `${W}[0].sha256`],
+    [(m) => { m.test_media = [{ ...item, sha256: undefined }]; }, 'missing-field', `${W}[0].sha256`],
+    [(m) => { m.test_media = [{ ...item, bytes: -1 }]; }, 'bad-value', `${W}[0].bytes`],
+    [(m) => { m.test_media = [{ ...item, bytes: 1.5 }]; }, 'bad-value', `${W}[0].bytes`],
+    [(m) => { m.test_media = [{ ...item, bytes: null }]; }, 'bad-value', `${W}[0].bytes`],
+    [(m) => { m.test_media = [{ ...item, source: 'downloaded' }]; }, 'bad-value', `${W}[0].source`],
+    [(m) => { m.test_media = [{ ...item, source: undefined }]; }, 'missing-field', `${W}[0].source`],
+  ];
+  for (const [change, code, detail] of bad) {
+    const d = validData();
+    change(d.modules[0]);
+    refused(reportFile(d), code, detail);
+  }
+});
+
 test('module: optional on a check and a section; when present a string of at most 80 characters', () => {
   const ok = [
     (m) => { m.checks[0].module = 'm'.repeat(80); },
@@ -318,10 +373,11 @@ test('host: each known field of section 3.3 has its form; another form is refuse
     (h) => { h.gpus = Array.from({ length: 16 }, (_, i) => ({ name: 'n'.repeat(200), id: `${i}`.padEnd(40, 'x') })); },
     (h) => { h.os.build = '26300'; h.os.release = 11; h.extra = { any: [1] }; }, // a reader ignores a field that it does not know
     (h) => { h.gpus[0].vram_bytes = 0; delete h.gpus[0].vendor; delete h.gpus[0].driver_version; },
+    (h) => { h.gpus[0].shared_memory_bytes = 34194001920; h.gpus[1].shared_memory_bytes = 0; },
     (h) => { // a writer writes null for an unknown field (3.3)
       for (const f of Object.keys(h.os)) h.os[f] = null;
       h.cpu.name = null; h.memory_bytes = null;
-      Object.assign(h.gpus[0], { vendor: null, driver_version: null, vram_bytes: null });
+      Object.assign(h.gpus[0], { vendor: null, driver_version: null, vram_bytes: null, shared_memory_bytes: null });
     },
     (h) => { h.os = null; h.cpu = null; h.gpus = null; },
   ];
@@ -352,6 +408,9 @@ test('host: each known field of section 3.3 has its form; another form is refuse
     [(h) => { h.gpus[0].vendor = 1; }, 'bad-value', `${W}.gpus[0].vendor`],
     [(h) => { h.gpus[0].driver_version = 610.88; }, 'bad-value', `${W}.gpus[0].driver_version`],
     [(h) => { h.gpus[0].vram_bytes = -2; }, 'bad-value', `${W}.gpus[0].vram_bytes`],
+    [(h) => { h.gpus[0].shared_memory_bytes = -1; }, 'bad-value', `${W}.gpus[0].shared_memory_bytes`],
+    [(h) => { h.gpus[0].shared_memory_bytes = 1.5; }, 'bad-value', `${W}.gpus[0].shared_memory_bytes`],
+    [(h) => { h.gpus[0].shared_memory_bytes = '32 GB'; }, 'bad-value', `${W}.gpus[0].shared_memory_bytes`],
   ];
   for (const [change, code, detail] of bad) {
     const d = validData();

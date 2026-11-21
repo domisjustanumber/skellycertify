@@ -1,6 +1,6 @@
 # Report format
 
-**Status:** draft. Format version 1.5.0.
+**Status:** draft. Format version 1.6.0.
 
 This document is the contract between the freemocap packages, the freemocap app and this
 repository. Each package implements it in its own code. There is no shared code package.
@@ -57,6 +57,8 @@ The function returns one module report ([section 3](#3-the-module-report)).
 **Package options.** A package can add its own options after these three arguments. Each option
 must be keyword-only and must have a default. The call `certify(level)` must always work.
 `certify_plan` takes the same options. The package gives its options in its own documentation.
+The format also has two keyword-only options that each package must accept: `abandon`
+([2.4](#24-cancel)) and `test_media_dir` ([2.8](#28-the-test-media-folder)).
 For example, skellytracker takes the execution providers to check and the pipeline of the user:
 
 ```python
@@ -116,6 +118,22 @@ The app shows only the latest message. It can drop or skip a message with no los
   `cancelled`.
 - The package must then do its cleanup ([2.5](#25-runtime-rules)) and return the report.
   The report is not valid as evidence (reason `cancelled`).
+
+**Abandon.** `certify()` of each package must accept the keyword-only option `abandon=None`.
+`certify_plan()` does not take it. `abandon` is an object with a method `is_set() -> bool`, as
+`cancel` is.
+
+- The app sets `abandon` when its backend ended early and the app already recorded the run as
+  `interrupted` ([2.5](#25-runtime-rules), "Interrupted run"). The process of the package can then
+  still run with no caller. It must not write a second report of the same run with `cancelled`.
+- The package must read `abandon.is_set()` as it reads `cancel.is_set()`.
+- When `abandon.is_set()` is true, the package must stop the run as for a cancel and do its cleanup
+  ([2.5](#25-runtime-rules)).
+- After an abandon, the package must store no result in its own store and must write no report
+  file.
+- The function still returns a module report, as after a cancel.
+- When `cancel` and `abandon` are both set, the rules of `abandon` apply
+  ([ADR-9FHP](decisions/entries/9FHP-format-1-6-0.md)).
 
 ### 2.5 Runtime rules
 
@@ -294,6 +312,14 @@ outside the data of each package.
   each file that the run wrote. The app never removes a file that was in the folder before the run.
   The app never removes the report.
 - A package that gets no `test_media_dir` uses its own work folder, as before.
+- When the folder does not hold a file that a check needs, the package uses its bundled copy of
+  that file, if it has one: the copy that is in the installed package.
+- A package must never use a file whose SHA-256 is wrong, a bundled copy or a file in the folder.
+  The check that needs the file then gets a reason code of the package, for example
+  `test-media-missing` of skellytracker.
+- The package lists each test media file that the checks of the run used in `test_media`, with
+  `source` `bundled` or `shared` ([3.9](#39-test_media),
+  [ADR-9FHP](decisions/entries/9FHP-format-1-6-0.md)).
 - The path of the folder is never in a report (privacy rule 1 of [section 6](#6-privacy-rules)).
 - The folder is never in a repository.
 
@@ -303,7 +329,7 @@ outside the data of each package.
 
 | Field | Type | Required | Meaning |
 |---|---|---|---|
-| `schema` | string | yes | `skellycertify.report/1.5.0` ([section 8](#8-versioning-of-the-format)). |
+| `schema` | string | yes | `skellycertify.report/1.6.0` ([section 8](#8-versioning-of-the-format)). |
 | `id` | string | no | A version 4 UUID in the lower-case form with hyphens (36 characters), for example `3f2b8c1e-9a4d-4e7b-b6a1-0c5d2e8f7a90`. The package gives it when it saves the report. It is unique in a report file. It holds no time and no data of the system. A version 1 UUID is forbidden, because it holds the MAC address. A report that was not saved can have no `id`. |
 | `package` | object | yes | See [3.2](#32-package). |
 | `kind` | string | yes | `quick`, `full` or `passive` ([7.2](#72-kinds-of-evidence)). `passive` is reserved for a record that the package gathers from normal use ([7.3](#73-the-passive-record-reserved)). Its fields are not yet defined. A writer must not write `passive` in this version. |
@@ -314,6 +340,7 @@ outside the data of each package.
 | `summary` | list | no | The summary items of the run for a person. See [3.7](#37-summary). |
 | `cleanup` | list | no | One check object for each cleanup step that failed. An empty list or no field means that each step passed. |
 | `notices` | list | no | What the person must do after the run. See [3.8](#38-notices). |
+| `test_media` | list | no | The test media files that the checks of the run used. See [3.9](#39-test_media). |
 | `answers` | list | no | The answers to the yes/no questions of the package: `section`, `id`, `text`, `answer` (`yes`, `no` or `null`). `text` is the fixed text of the question. |
 | `details` | object | no | Facts of the package that have no field here. They obey [section 6](#6-privacy-rules). |
 | `evidence` | object | yes | `valid` (boolean) and `reasons` (list of reason codes). See [section 7](#7-evidence-validity). |
@@ -343,13 +370,15 @@ writes `null`. This does not apply to `name` and `id` of a GPU.
 | `os.arch` | The CPU architecture, for example `x86_64` or `arm64`. |
 | `cpu.name` | The model name of the CPU. |
 | `memory_bytes` | The total memory in bytes. |
-| `gpus` | A list. Each item has `vendor`, `name`, `id` (the PCI vendor id and device id in lower-case hex, for example `10de:2484`), `driver_version` and `vram_bytes`. |
+| `gpus` | A list. Each item has `vendor`, `name`, `id` (the PCI vendor id and device id in lower-case hex, for example `10de:2484`), `driver_version`, `vram_bytes` (the dedicated memory of the GPU in bytes) and `shared_memory_bytes` (the shared system memory that the GPU can use, in bytes, for example `SharedSystemMemory` of DXGI on Windows; `null` when the OS gives no value). |
 
 The fields have these forms. The relay refuses another form.
 
 - `os` and `cpu` are objects or `null`. Each field of the table above in them is a string, a
   number or `null`.
 - `memory_bytes` and `vram_bytes` are numbers of 0 or more, or `null`.
+- `shared_memory_bytes` is an integer of 0 or more, or `null`
+  ([ADR-9FHP](decisions/entries/9FHP-format-1-6-0.md)).
 - `gpus` is a list or `null`. It has at most 16 items. Each item is an object. `name` (at most 200
   characters) and `id` (at most 40 characters) are strings, and each item must have them. `vendor`
   and `driver_version` are strings or `null`.
@@ -416,7 +445,7 @@ result `not-run`, with a reason such as `ep-not-installed`, `gpu-not-usable` or 
 - A check can have `numbers`, for example `seconds`, `frames`, `ep_ms`, `cpu_ms`,
   `max_abs_diff`, `speed_against_cpu` and `exit_code`.
 
-**Level `quick`.** The quick run has a limit of 75 seconds. A check that does not fit in it is
+**Level `quick`.** The quick run has a limit of 65 seconds. A check that does not fit in it is
 `not-run` with `over-budget`. The CPU EP runs only as the reference for a pair that is not
 reviewed. A pair that has a reviewed pass does not run. It gets an `ep` item `skipped` with
 `reviewed`. A quick run in which each pair is reviewed runs no check. Its evidence reason is
@@ -454,6 +483,8 @@ reviewed. A pair that has a reviewed pass does not run. It gets an `ep` item `sk
 - With no EP at all, `full` still runs the CPU checks. For `certify("full")`, it installs nothing
   and it downloads only the test image. It reads `<sha256>.zip` in `test_media_dir`
   ([2.8](#28-the-test-media-folder)).
+- `test_media` lists the test frames file of the package, `quick_frames.zip`, when a check used it
+  ([3.9](#39-test_media)).
 
 **`details`.**
 
@@ -505,7 +536,7 @@ reviewed. A pair that has a reviewed pass does not run. It gets an `ep` item `sk
 
 ```json
 {
- "schema": "skellycertify.report/1.5.0",
+ "schema": "skellycertify.report/1.6.0",
  "id": "3f2b8c1e-9a4d-4e7b-b6a1-0c5d2e8f7a90",
  "package": {"name": "skellytracker", "version": "2024.9.1019",
              "commit": "0123456789abcdef0123456789abcdef01234567", "tree_modified": false},
@@ -518,7 +549,7 @@ reviewed. A pair that has a reviewed pass does not run. It gets an `ep` item `sk
   "memory_bytes": 68388003840,
   "gpus": [
    {"vendor": "nvidia", "name": "NVIDIA GeForce RTX 3070", "id": "10de:2484", "driver_version": "610.88",
-    "vram_bytes": 8589934592}
+    "vram_bytes": 8589934592, "shared_memory_bytes": 34194001920}
   ]
  },
  "summary": [
@@ -548,6 +579,10 @@ reviewed. A pair that has a reviewed pass does not run. It gets an `ep` item `sk
                "p95_ms": 17.85, "vram_before_mib": 0, "peak_vram_mib": 0}}
  ],
  "cleanup": [],
+ "test_media": [
+  {"name": "quick_frames.zip", "sha256": "a973456f417eab8e24ea8aa3f118a48142aa55143af69c73ee6799cb4f94c1f4",
+   "bytes": 6215661, "source": "bundled"}
+ ],
  "details": {
   "pipeline": "yolox-rtmw-wholebody@skellytracker",
   "eps": {
@@ -606,7 +641,7 @@ person ([4.2](#42-layout)). It is not the `summary` of a section ([3.5](#35-sect
 | `name` | A short fixed name from the vocabulary of the package, for example `TensorRT RTX`, `CUDA`, `DirectML` or `CPU`. For a camera, the camera model, for example `Logitech C922`. For `benchmark`, the tested part, as for `ep`. For `component`, the name of the component, for example `MediaPipe`. |
 | `device` | For `ep`, `gpu-jpeg` and `benchmark`: the `id` of the GPU in `host.gpus`. For a PCI device this is `vvvv:dddd`. For `camera`: the USB id `vvvv:pppp`. For `component`: always `null`. Else `null`. |
 | `result` | Not for `benchmark`. `pass`, `fail`, `record-only`, `partial` or `skipped`. |
-| `reason` | Not for `benchmark`. For `skipped`: `busy` or `reviewed`. For each other result: absent or `null`. |
+| `reason` | Not for `benchmark`. For `skipped`: `busy` or `reviewed`, and for a `component` item also `not-installed`. For each other result: absent or `null`. |
 | `gate` | Optional. Only for `ep`, `gpu-jpeg`, `camera` and `component`. The `name` of one roll-up check ([3.4](#34-check)) of the same module report, for example `046d-085c:gate` for a camera. It matches the pattern of a check name. The relay refuses another form. The package names it. [7.2](#72-kinds-of-evidence) tells what it gives ([ADR-T191](decisions/entries/T191-gate-of-a-summary-item.md)). |
 | `stage` | Only for `benchmark`. A short fixed name of the package for the measured stage. At most 80 characters. |
 | `ms_per_frame`, `fps` | Only for `benchmark`. Two numbers, each 0 or more: the time in milliseconds to process one frame set, and the frame sets for each second. `fps` is 1000 / `ms_per_frame`. |
@@ -620,6 +655,8 @@ than one camera gives the count of cameras, for example `pipeline-3` is three ca
 not an EP, a GPU JPEG decode, a camera or a benchmark, for example a library or a part of the app.
 It has the fields of an `ep` item, and its `device` is `null`. Its `result` and the `reason` of
 `skipped` obey the rules of each other item ([ADR-VV80](decisions/entries/VV80-format-1-5-0.md)).
+Only a `component` item can also have `skipped` with the reason `not-installed`
+([ADR-9FHP](decisions/entries/9FHP-format-1-6-0.md)).
 
 The results of an item:
 
@@ -627,7 +664,9 @@ The results of an item:
   is not fatal. Each group can use it.
 - `skipped`: the package did not test the item. The reason `busy` tells that another program holds
   the camera or the GPU. The reason `reviewed` tells that the package skipped the item at the level
-  `quick` because the item already has a reviewed pass.
+  `quick` because the item already has a reviewed pass. The reason `not-installed` tells that the
+  component is not installed on the system, for example Blender. Only a `component` item can have
+  `not-installed`.
 
 A `benchmark` item has no `result` and no `reason`. The details of the measurement stay in
 `checks`.
@@ -672,6 +711,25 @@ A `gate` does not change the result of its item. An item with the result `partia
 Example: `{"code": "camera-wedged", "values": {"camera": "Logitech C922"}}`. The app shows it as
 "Camera Logitech C922: wedged, please replug".
 
+### 3.9 `test_media`
+
+`test_media` is optional. It is a list of the test media files that the checks of this run used
+([2.8](#28-the-test-media-folder)). Each item is an object with these fields:
+
+| Field | Meaning |
+|---|---|
+| `name` | The name that the package gives the file, never a path. A string of at most 120 characters, for example `quick_frames.zip`. Use this name also for a `shared` file, not its name in the folder. |
+| `sha256` | The SHA-256 of the file: 64 lower-case hex digits. |
+| `bytes` | The size of the file in bytes: an integer, 0 or more. |
+| `source` | `bundled`: the copy that is in the installed package. `shared`: the file in the test media folder ([2.8](#28-the-test-media-folder)). |
+
+- A module report that used no test media file gives an empty list or has no `test_media` field.
+- The list has at most 50 items.
+- Each item obeys the privacy rules of [section 6](#6-privacy-rules). Rule 7 also applies to
+  `name`: a `name` that ends with the extension of an image, video or audio file is refused.
+- The relay checks the form of `test_media`. The issue does not show it
+  ([ADR-9FHP](decisions/entries/9FHP-format-1-6-0.md)).
+
 ## 4. The report file
 
 ### 4.1 Content
@@ -680,7 +738,7 @@ One report file holds one JSON object:
 
 | Field | Meaning |
 |---|---|
-| `schema` | `skellycertify.report/1.5.0`. |
+| `schema` | `skellycertify.report/1.6.0`. |
 | `app` | `name`, `version` (SemVer) and `commit` of the app, or `null` for a report of one package that ran alone. |
 | `modules` | A list of module reports. The list holds at least one module report. A package can give more than one module report, for example one for each run. Each module report is independent ([7.1](#71-validity)). |
 | `note` | The one free-text note of the person, or `null`. At most 2000 characters. It must be a clean note (rule 18 of [section 6](#6-privacy-rules)). |
@@ -722,6 +780,12 @@ So:
 
 The file is Markdown, in UTF-8, with `\n` line ends. Its name is
 `certify-report-<yyyymmddThhmmssZ>.md`, with the UTC start time of the run.
+
+**The time of a file with more than one report of one package.** An app can put more than one
+report of one package in one file ([4.1](#41-content)). The file name and the time in the header
+line of such a file are the oldest `created_utc` of the module reports in the file. The bytes of the
+file must not change between the view of the person and the send ([4.1](#41-content), "Send rules
+for the app") ([ADR-9FHP](decisions/entries/9FHP-format-1-6-0.md)).
 
 The Markdown part is a short summary for a person. It has these parts, in this order, with a blank
 line between two parts:
@@ -795,11 +859,12 @@ line between two parts:
     the object of [4.1](#41-content). The fence has at least 3 backticks. It is longer than each
     run of backticks in the JSON.
 
-The Markdown shows a result as `pass`, `fail`, `record`, `partial`, `skipped (busy)` or
-`skipped (already reviewed)`. Part 8 also shows `not run`, the display of `not-run`. `record` is
-the display of `record-only`. `skipped (busy)` is the
+The Markdown shows a result as `pass`, `fail`, `record`, `partial`, `skipped (busy)`,
+`skipped (already reviewed)` or `skipped (not installed)`. Part 8 also shows `not run`, the display
+of `not-run`. `record` is the display of `record-only`. `skipped (busy)` is the
 display of `skipped` with the reason `busy`. `skipped (already reviewed)` is the display of
-`skipped` with the reason `reviewed`. A writer prints the summary items. It does not compute them.
+`skipped` with the reason `reviewed`. `skipped (not installed)` is the display of `skipped` with
+the reason `not-installed`. A writer prints the summary items. It does not compute them.
 The relay shows the same summary in the issue. It builds it from the JSON block and not from the
 Markdown.
 
@@ -877,17 +942,17 @@ Note of the person:
 
 ```json
 {
- "schema": "skellycertify.report/1.5.0",
+ "schema": "skellycertify.report/1.6.0",
  "app": {"name": "freemocap", "version": "2.0.0", "commit": "89abcdef0123456789abcdef0123456789abcdef"},
  "modules": [
-  {"schema": "skellycertify.report/1.5.0", "package": {"name": "skellytracker", "...": "..."},
+  {"schema": "skellycertify.report/1.6.0", "package": {"name": "skellytracker", "...": "..."},
    "summary": [
     {"group": "ep", "name": "CUDA", "device": "10de:2484", "result": "skipped", "reason": "reviewed"},
     {"group": "ep", "name": "DirectML", "device": "10de:2484", "result": "pass"},
     {"group": "ep", "name": "CPU", "device": null, "result": "record-only"},
     {"group": "component", "name": "MediaPipe", "device": null, "result": "skipped", "reason": "reviewed"}
    ]},
-  {"schema": "skellycertify.report/1.5.0", "package": {"name": "skellycam", "...": "..."},
+  {"schema": "skellycertify.report/1.6.0", "package": {"name": "skellycam", "...": "..."},
    "summary": [
     {"group": "camera", "name": "Logitech C922", "device": "046d:085c", "result": "partial"},
     {"group": "camera", "name": "Razer Kiyo Pro", "device": "1532:0e05", "result": "skipped", "reason": "busy"}
@@ -1135,6 +1200,20 @@ the capture backend and the OS. Camera evidence is not part of an EP row.
 
 Changes of the format:
 
+- 1.6.0: `certify()` accepts the keyword-only option `abandon`. When it is set, the run stops as
+  for a cancel, and the package stores no result and writes no report file. `abandon` applies when
+  `cancel` is also set ([2.4](#24-cancel)). A `component` summary item can have `skipped` with the
+  new reason `not-installed`, shown as `skipped (not installed)` ([3.7](#37-summary),
+  [4.2](#42-layout)). A module report can have the optional field `test_media`
+  ([3.9](#39-test_media)), and a package uses its bundled copy of a test media file when the test
+  media folder does not hold it ([2.8](#28-the-test-media-folder)). An item of `host.gpus` can have
+  the optional field `shared_memory_bytes` ([3.3](#33-host)). A file with more than one report of
+  one package carries the oldest `created_utc` in its name and its header line ([4.2](#42-layout)).
+  This is a minor change. The owner decided that a new allowed value of this kind is a minor step:
+  `not-installed` does not change the meaning of `busy` or `reviewed`, and only a `component` item
+  can have it. The limit of the quick run of skellytracker in [3.6](#36-example-skellytracker) is
+  65 seconds, not 75 seconds. That is a fix of the text. A reader of major version 1 still accepts
+  a file of 1.5.0 or earlier ([ADR-9FHP](decisions/entries/9FHP-format-1-6-0.md)).
 - 1.5.0: The new summary group `component` gives the result of a check of a part of the software
   that is not an EP, a GPU JPEG decode, a camera or a benchmark. Its `device` is `null`. The
   Markdown shows its items in the component table `| Module | Result |`, directly after the
@@ -1193,7 +1272,7 @@ These are the only packages of this format.
 
 | Package | Evidence for | `certify()` | Reason codes | Evidence rows |
 |---|---|---|---|---|
-| skellytracker | execution providers (EPs) | `skellytracker.certify` and `skellytracker.certify_plan`, levels `quick` and `full`. Package options: `execution_providers`, `pipeline`. The tool `tools/certify_platform.py` writes a report file of this format (schema 1.5.0; see [3.6](#36-example-skellytracker)). | `skellytracker/REASON_CODES.md` | `skellytracker/core/eps/ep_evidence.yaml` (EPs); this repository for the other sections |
+| skellytracker | execution providers (EPs) | `skellytracker.certify` and `skellytracker.certify_plan`, levels `quick` and `full`. Package options: `execution_providers`, `pipeline`. The tool `tools/certify_platform.py` writes a report file of this format (schema 1.6.0; see [3.6](#36-example-skellytracker)). | `skellytracker/REASON_CODES.md` | `skellytracker/core/eps/ep_evidence.yaml` (EPs); this repository for the other sections |
 | freemocap | the app on an OS: it starts a child process, loads its bundled modules and can write its data folder | `freemocap.certify` and `freemocap.certify_plan`, level `quick`. The level `full` is not built. Package options: `ui_remote`, `blender_exe_path`. | the docstring of `freemocap/certification.py` | none yet |
 | skellycam | cameras ([7.4](#74-camera-evidence)) | not yet implemented | not yet implemented | not yet implemented |
 
