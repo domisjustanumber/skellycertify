@@ -16,7 +16,7 @@ const CHECK_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9_.:@-]{0,127}$/;
 const ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/; // a version 4 UUID in lower case
 const KINDS = ['quick', 'full', 'passive'];
 export const RESULTS = ['pass', 'fail', 'not-run', 'record-only'];
-const SUMMARY_GROUPS = ['ep', 'gpu-jpeg', 'camera', 'benchmark'];
+const SUMMARY_GROUPS = ['ep', 'gpu-jpeg', 'camera', 'benchmark', 'component'];
 const SUMMARY_RESULTS = ['pass', 'fail', 'record-only', 'partial', 'skipped'];
 const SKIP_REASONS = ['busy', 'reviewed'];
 const SUMMARY_ITEMS = 200; // a limit of the relay, so that the issue body stays small
@@ -128,7 +128,8 @@ function checkModule(m, where, year) {
       if (!isObj(s)) throw new Refused('bad-value', w);
       const group = need(s, 'group', w, (v) => SUMMARY_GROUPS.includes(v));
       need(s, 'name', w, (v) => short(v) && v.length > 0);
-      need(s, 'device', w, (v) => v === null || (str(v) && [...v].length <= 40));
+      // A component item has no device (3.7).
+      need(s, 'device', w, (v) => v === null || (group !== 'component' && str(v) && [...v].length <= 40));
       if (group === 'benchmark') { // no result and no reason
         need(s, 'stage', w, (v) => short(v) && v.length > 0);
         need(s, 'ms_per_frame', w, figure);

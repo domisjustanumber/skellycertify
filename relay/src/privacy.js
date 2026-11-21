@@ -3,7 +3,9 @@
 // "String" means each key and each string value of the JSON object, and each line of the
 // Markdown part (the text before the fenced json block).
 
-import { KEPT } from './issue.js';
+import { KEPT, IPV4_RE } from './issue.js';
+
+export { IPV4_RE }; // rule 20. issue.js holds it, because the issue prints a match as the writer does.
 
 // Each pattern has bounded repeats or a start that only one position of a run can match, so a long
 // string costs linear time. stringRule() also tests the length (rule 6) before any pattern.
@@ -25,10 +27,6 @@ const TRACEBACK = 'Traceback (most recent call last)'; // rule 10
 const MARKUP_RE = /<|\]\(|\]:|:\/\/|www\./i; // rule 17: the Markdown part needs none of these
 const NOTE_RE = new RegExp(`^[\\n${KEPT}]*$`, 'u'); // rule 18: the characters that neutral() keeps, and the line feed
 const LINK_RE = /:\/\/|www\./i; // rule 18
-// Rule 20: an IPv4 address. Only for the Markdown part and the note: a driver or package version in
-// the JSON can have four numeric parts.
-const PART = '(?:25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)';
-export const IPV4_RE = new RegExp(`\\b(?:${PART}\\.){3}${PART}\\b`);
 
 // Characters as Python counts them (code points), so the writer and the relay agree.
 const tooLong = (s) => s.length > MAX_CHARS && [...s].length > MAX_CHARS;

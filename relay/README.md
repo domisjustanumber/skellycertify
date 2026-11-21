@@ -58,9 +58,11 @@ of 4.2.
   `no summary in the report`, because the EPs of such a file can have run. A result is `pass`,
   `fail`, `record`, `partial`, `skipped (busy)` or `skipped (already reviewed)`.
 - Only when a module has a `benchmark` item: the table `| GPU | Module | Stage | ms/frame | FPS |`.
+- Only when a module has a `component` item: the table `| Module | Result |` of 4.2 part 6, with
+  one row for each `component` item. A `component` item must have `device` `null`.
 - The camera table, or the line `Cameras: not checked on this system.`
 - Only when it has a row: `Checks that did not pass:` and the table
-  `| Package | Module | Test | Result | Reason |` of 4.2 part 7. It has one row for each check with
+  `| Package | Module | Test | Result | Reason |` of 4.2 part 8. It has one row for each check with
   the result `fail`. It has one row for each check with the result `not-run` whose `module` is the
   `name` of a `partial` or `fail` summary item of the same module. A section with the result `fail`
   and no check of its own has one row. The `Package` cell also shows the `id` of the module. The
@@ -74,13 +76,14 @@ The body does not show `notices` ([report-format.md 3.8](../report-format.md#38-
 for the person at the app. The relay checks their form only.
 
 If the body is longer than 65,536 characters, the relay removes rows from the end of the tables
-and says so. It removes the rows of the checks that did not pass first, then the benchmark rows, the camera rows, the GPU
-rows and the module lines. The report file holds all rows.
+and says so. It removes the rows of the checks that did not pass first, then the benchmark rows, the component rows, the
+camera rows, the GPU rows and the module lines. The report file holds all rows.
 
 Each report string is untrusted. The relay removes each character that can start a mention, an
 issue link, HTML or a Markdown link (`@`, `#`, `<`, `>`, `[`, `]`, `!`, `|`, `` ` ``, `*` and
 control characters). It breaks each `://`, each `www.` and each `GH-` before a digit, so GitHub
-makes no link and no issue reference. It puts report values in code spans. Each value that is not
+makes no link and no issue reference. It prints each dot of a four-part number in a value as a
+space, as the writer does in the file (rule 20 of section 6). It puts report values in code spans. Each value that is not
 a string or a number (an object, a list, a boolean or `null`) prints as empty text.
 
 ## Answers for the app developers

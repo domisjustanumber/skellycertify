@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { neutral, buildTitle, buildBody, marker, BODY_LIMIT, gpuName, cpuName, osLabel, gigabytes } from '../src/issue.js';
+import { neutral, buildTitle, buildBody, marker, BODY_LIMIT, gpuName, cpuName, osLabel, gigabytes, IPV4_RE } from '../src/issue.js';
 import { validData } from './helpers.js';
 
 const HASH = 'a'.repeat(64);
@@ -267,6 +267,49 @@ test('benchmark table: GPU cell as in the GPU table, figures with one decimal pl
   ]);
 });
 
+test('component table 1.5.0: directly after the benchmark table, the display words of the GPU table', () => {
+  const d = validData();
+  const second = validData().modules[0];
+  second.summary = [{ group: 'component', name: 'Child process', device: null, result: 'fail' }];
+  d.modules[0].summary.push(
+    { group: 'component', name: 'MediaPipe', device: null, result: 'skipped', reason: 'reviewed' },
+    { group: 'component', name: 'Blender', device: null, result: 'partial' },
+  );
+  d.modules.push(second);
+  const lines = buildBody(args(d)).split('\n');
+  const i = lines.indexOf('| Module | Result |');
+  assert.equal(lines[i - 2], '| - | `CPU` | `pipeline-1` | 95.0 | 10.5 |', 'directly after the benchmark table');
+  assert.deepEqual(lines.slice(i + 1, i + 6), [
+    '|---|---|',
+    '| `MediaPipe` | skipped (already reviewed) |',
+    '| `Blender` | partial |',
+    '| `Child process` | fail |',
+    '',
+  ]);
+  assert.equal(lines[i + 6], 'Cameras: not checked on this system.');
+  assert.doesNotMatch(buildBody(args(validData())), /^\| Module \| Result \|$/m, 'no component item: no component table');
+  const g = validData();
+  g.modules[0].summary = [{ group: 'component', name: 'MediaPipe', device: null, result: 'pass' }];
+  const body = buildBody(args(g)).split('\n');
+  assert.equal(body[body.indexOf('| Module | Result |') - 2], '| `Intel UHD 770` | | not checked |', 'no benchmark table: after the GPU table');
+});
+
+test('rule 20: a four-part number in a value prints with spaces, as the writer prints it in the file', () => {
+  assert.equal(neutral('Camera 2.1.0.5 rev'), 'Camera 2 1 0 5 rev');
+  assert.equal(neutral('1.2.3.4.5.6.7'), '1 2 3 4 5 6 7', 'again until no match is left');
+  assert.equal(neutral('32.0.101.6881'), '32.0.101.6881', 'no match: unchanged');
+  assert.equal(neutral('10.0.26300'), '10.0.26300');
+  const d = validData();
+  d.modules[0].host.cpu.name = 'CPU 2.1.0.5';
+  d.modules[0].summary.push({ group: 'component', name: 'Lib 1.2.3.4', device: null, result: 'fail' });
+  d.modules[0].checks.push({ section: '3', name: 'lib-1.2.3.4', result: 'fail', reason: 'crashed' });
+  const body = buildBody(args(d));
+  assert.match(body, /- CPU: `CPU 2 1 0 5`/);
+  assert.match(body, /\| `Lib 1 2 3 4` \| fail \|/);
+  assert.match(body, /\| `lib-1 2 3 4` \| fail \|/);
+  assert.doesNotMatch(body.replace(/^Report file:.*$/m, ''), IPV4_RE);
+});
+
 test('a cancelled or interrupted module is incomplete in its header line', () => {
   const d = validData();
   d.app = null;
@@ -319,6 +362,7 @@ test('hostile report strings are neutral in the body; only the relay marker is H
   d.modules[0].summary.push(...HOSTILE.map((name) => ({ group: 'camera', name, device: name, result: 'pass' })));
   d.modules[0].summary.push({ group: 'ep', name: HOSTILE[2], device: HOSTILE[5], result: 'pass' });
   d.modules[0].summary.push(...HOSTILE.map((name) => ({ group: 'benchmark', name, device: name, stage: name, ms_per_frame: 1, fps: 1 })));
+  d.modules[0].summary.push(...HOSTILE.map((name) => ({ group: 'component', name, device: null, result: 'pass' })));
   d.modules[0].summary.push({ group: 'camera', name: HOSTILE[2], device: null, result: 'partial' });
   d.modules[0].checks.push({ section: '3', name: 'x', module: HOSTILE[2], result: 'not-run', reason: HOSTILE[4] });
   d.note = HOSTILE.join('\n');

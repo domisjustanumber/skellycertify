@@ -10,8 +10,9 @@ task. Delete an item when its work is done. The PR that closes an item records t
   first hand-ins from freemocap. No report counts as evidence while it is on. Set `TEST_MODE` to
   `"false"` in `relay/wrangler.jsonc` and deploy, with the approval of the owner.
 - **The relay: deploy and switch on ([ADR-V1TR](entries/V1TR-format-1-4-0.md),
-  [ADR-MM1F](entries/MM1F-relay-hardened-after-security-review.md)).** The live relay is switched
-  off since 2026-11-20. It does not have the code of format 1.4.0 and of the hardening yet. Deploy
+  [ADR-MM1F](entries/MM1F-relay-hardened-after-security-review.md),
+  [ADR-VV80](entries/VV80-format-1-5-0.md)).** The live relay is switched off since 2026-11-20. It
+  does not have the code of format 1.4.0, of the hardening and of format 1.5.0 yet. Deploy
   the relay and switch it on, with the approval of the owner. Before volunteers use it, add the
   branch rule on `main` of `relay/README.md` Part 2 step 7.
 - **freemocap: the clean note and the content type
@@ -32,7 +33,7 @@ task. Delete an item when its work is done. The PR that closes an item records t
   ([3.8](../report-format.md#38-notices)). Keep each notice code with its meaning and its text for
   the person in the list of the reason codes ([5.4](../report-format.md#54-codes-of-a-package)).
 - **freemocap: the app side of format 1.4.0 ([ADR-V1TR](entries/V1TR-format-1-4-0.md)).** Write the
-  table `Checks that did not pass:` of [4.2](../report-format.md#42-layout) part 7 in the Markdown
+  table `Checks that did not pass:` of [4.2](../report-format.md#42-layout) part 8 in the Markdown
   writer. Turn each notice code of each package into its text for the person
   ([3.8](../report-format.md#38-notices)). Show the `risks` of each plan at the consent. Do not
   offer a run of a level when the `total` of each plan is 0
@@ -40,6 +41,23 @@ task. Delete an item when its work is done. The PR that closes an item records t
 - **skellytracker: `over-budget` ([ADR-V1TR](entries/V1TR-format-1-4-0.md)).** Give a check that
   did not run because the time limit of the level was used up the result `not-run` with
   `over-budget` ([5.3](../report-format.md#53-common-reason-codes)).
+- **skellytracker: the `component` item of MediaPipe ([ADR-VV80](entries/VV80-format-1-5-0.md)).**
+  For the check `mediapipe:smoke`, write a `component` item `MediaPipe` with `device` `null`
+  ([3.6](../report-format.md#36-example-skellytracker), [3.7](../report-format.md#37-summary)). When
+  `quick` skips the check because it has a reviewed pass, give the item the result `skipped` with
+  `reviewed`. In `tools/certify_platform.py`, print the component table of
+  [4.2](../report-format.md#42-layout) part 6, and print a four-part number in a value as rule 20 of
+  [section 6](../report-format.md#6-privacy-rules) says.
+- **freemocap: the app side of format 1.5.0 ([ADR-VV80](entries/VV80-format-1-5-0.md)).** Write a
+  `component` item with `device` `null` for each check of the own module of the app: build identity,
+  child process, imports, data folder, install facts and Blender
+  ([3.7](../report-format.md#37-summary)). Print the component table of
+  [4.2](../report-format.md#42-layout) part 6 in the Markdown writer. In the Markdown part, print
+  each four-part number in a value with each dot replaced by a space (rule 20 of
+  [section 6](../report-format.md#6-privacy-rules)).
+- **Each package: the schema id of format 1.5.0 ([ADR-VV80](entries/VV80-format-1-5-0.md)).**
+  skellytracker, skellycam and freemocap must write the schema id `skellycertify.report/1.5.0`, not
+  `skellycertify.report/1.4.0`, when they write the rules of format 1.5.0.
 - **skellytracker: write format 1.3.0
   ([ADR-F1KN](entries/F1KN-format-1-2-0-markdown-layout-revised.md),
   [ADR-D1PW](entries/D1PW-format-1-3-0.md)).** In the module report of `certify()`, fill `summary`

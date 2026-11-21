@@ -208,6 +208,37 @@ test('gate 1.4.0: optional on an ep, gpu-jpeg or camera item; a check name of 3.
   }
 });
 
+test('component 1.5.0: the fields of an ep item, the device must be null', () => {
+  const item = { group: 'component', name: 'MediaPipe', device: null, result: 'pass' };
+  const ok = [
+    item,
+    { ...item, result: 'skipped', reason: 'reviewed' },
+    { ...item, result: 'partial', reason: null, gate: 'mediapipe:gate' },
+  ];
+  for (const it of ok) {
+    const d = validData();
+    d.modules[0].summary.push(it);
+    assert.ok(parse(reportFile(d)), JSON.stringify(it));
+  }
+  const W = 'report.modules[0].summary[6]';
+  const bad = [
+    [{ ...item, device: '10de:2484' }, 'bad-value', `${W}.device`],
+    [{ ...item, device: '' }, 'bad-value', `${W}.device`],
+    [{ group: 'component', name: 'MediaPipe', result: 'pass' }, 'missing-field', `${W}.device`],
+    [{ ...item, result: undefined }, 'missing-field', `${W}.result`],
+    [{ ...item, result: 'not-run' }, 'bad-value', `${W}.result`],
+    [{ ...item, result: 'skipped' }, 'missing-field', `${W}.reason`],
+    [{ ...item, result: 'skipped', reason: 'later' }, 'bad-value', `${W}.reason`],
+    [{ ...item, reason: 'busy' }, 'bad-value', `${W}.reason`],
+    [{ ...item, gate: 'a gate' }, 'bad-value', `${W}.gate`],
+  ];
+  for (const [it, code, detail] of bad) {
+    const d = validData();
+    d.modules[0].summary.push(it);
+    refused(reportFile(d), code, detail);
+  }
+});
+
 test('module: optional on a check and a section; when present a string of at most 80 characters', () => {
   const ok = [
     (m) => { m.checks[0].module = 'm'.repeat(80); },

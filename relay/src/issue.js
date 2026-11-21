@@ -16,6 +16,19 @@ const CUT_ROOM = 120; // room for one "shortened" line
 export const KEPT = "\\p{L}\\p{M}\\p{N} .,:;_+=()'%/?·-";
 const DROP_RE = new RegExp(`[^${KEPT}]+`, 'gu');
 
+// Privacy rule 20: an IPv4 address. privacy.js tests it on the Markdown part and the note only: a
+// driver or package version in the JSON can have four numeric parts.
+const PART = '(?:25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)';
+export const IPV4_RE = new RegExp(`\\b(?:${PART}\\.){3}${PART}\\b`);
+const IPV4_ALL = new RegExp(IPV4_RE.source, 'g');
+
+// Rule 20 for a printed value: each dot of a match becomes a space, again until no match is left,
+// as the writer prints it in the Markdown part. So the issue shows the value as the file does.
+const noIpv4 = (s) => {
+  while (IPV4_RE.test(s)) s = s.replace(IPV4_ALL, (m) => m.replace(/\./g, ' '));
+  return s;
+};
+
 // Only a string or a finite number is text. Each other JSON value (object, list, boolean, null) is empty.
 const text = (v) => (typeof v === 'string' ? v : Number.isFinite(v) ? String(v) : '');
 
@@ -23,7 +36,7 @@ export function neutral(value, max = 120) {
   let s = text(value).normalize('NFKC');
   s = s.replace(DROP_RE, ' ');
   s = s.replace(/:\/\//g, ': //').replace(/(www)\./gi, '$1 .').replace(/(gh-)(?=\d)/gi, '$1 ');
-  s = s.replace(/\s+/g, ' ').trim();
+  s = noIpv4(s).replace(/\s+/g, ' ').trim();
   const chars = [...s];
   return chars.length > max ? `${chars.slice(0, max - 1).join('').trimEnd()}…` : s;
 }
@@ -51,7 +64,7 @@ const osOf = (m) => (str(m.host?.os?.label) ? osLabel(m.host.os.label) : str(m.h
 
 // A check name of the format (3.4) holds no backtick, bar or space, so it is safe in a code span as it is.
 // It keeps its "@", which neutral() removes. Another name, for example of a section, goes through neutral().
-const testName = (v) => (/^[A-Za-z0-9_.:@-]{1,128}$/.test(text(v)) ? `\`${v}\`` : code(v, 128));
+const testName = (v) => (/^[A-Za-z0-9_.:@-]{1,128}$/.test(text(v)) ? `\`${noIpv4(v)}\`` : code(v, 128));
 
 export function buildTitle(data) {
   const first = data.modules[0];
@@ -151,11 +164,12 @@ const benchmarkRows = (data) => data.modules.flatMap((m) => itemsOf(m)
   .filter((it) => it.group === 'benchmark')
   .map((it) => `| ${deviceCell(it, gpusOf(m))} | ${code(it.name, 80)} | ${code(it.stage, 80)} | ${it.ms_per_frame.toFixed(1)} | ${it.fps.toFixed(1)} |`));
 
-const cameraRows = (data) => data.modules.flatMap((m) => itemsOf(m)
-  .filter((it) => it.group === 'camera')
+// The component table of 4.2 part 6 and the camera table of part 7: the name and the result of each item of the group.
+const nameRows = (data, group) => data.modules.flatMap((m) => itemsOf(m)
+  .filter((it) => it.group === group)
   .map((it) => `| ${code(it.name, 80)} | ${shown(it)} |`));
 
-// The table of 4.2 part 7: each failed check, and each not-run check whose module is the name of a
+// The table of 4.2 part 8: each failed check, and each not-run check whose module is the name of a
 // partial or failed summary item of the same module report. Other not-run checks have no row: a
 // system has many checks that cannot run on it. A failed section with no check of its own gets one row.
 function notPassedRows(data) {
@@ -198,7 +212,7 @@ export function buildBody({ data, hash, filePath, fileUrl, testMode }) {
   const start = when(data.modules.map((m) => m.created_utc).sort()[0]);
   const lists = [
     single ? [moduleLine(data.modules[0], true)] : data.modules.map((m) => `- ${moduleLine(m, false)}`),
-    gpuRows(data), benchmarkRows(data), cameraRows(data), notPassedRows(data),
+    gpuRows(data), benchmarkRows(data), nameRows(data, 'camera'), notPassedRows(data), nameRows(data, 'component'),
   ];
   const system = systemLines(data);
   const note = typeof data.note === 'string' && neutral(data.note, 10) ? ['Note of the person:', '', quote(data.note)] : [];
@@ -220,14 +234,14 @@ export function buildBody({ data, hash, filePath, fileUrl, testMode }) {
     return [
       testMode ? ['**Test of the relay.** This issue is never evidence.'] : [],
       header, system, table(1, '| GPU | Module | Result |'), table(2, '| GPU | Module | Stage | ms/frame | FPS |'),
-      cameras, notPassed, note, tail,
+      table(5, '| Module | Result |'), cameras, notPassed, note, tail,
     ].filter((p) => p.length).map((p) => p.join('\n')).join('\n\n');
   };
   const kept = lists.map((l, i) => (i === 0 ? Math.min(l.length, MODULE_LINES) : l.length));
   let body = make(kept);
-  // Drop rows from the end: first the rows of the checks that did not pass, then the benchmarks, the cameras, the GPUs and
-  // the module lines. Each row takes its length and one "\n". CUT_ROOM makes room for the "shortened" line.
-  for (const i of [4, 2, 3, 1, 0]) {
+  // Drop rows from the end: first the rows of the checks that did not pass, then the benchmarks, the components, the
+  // cameras, the GPUs and the module lines. Each row takes its length and one "\n". CUT_ROOM makes room for the "shortened" line.
+  for (const i of [4, 2, 5, 3, 1, 0]) {
     if (body.length <= BODY_LIMIT) break;
     let excess = body.length - BODY_LIMIT + CUT_ROOM;
     while (kept[i] > 0 && excess > 0) excess -= lists[i][--kept[i]].length + 1;
