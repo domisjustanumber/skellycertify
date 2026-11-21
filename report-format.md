@@ -1,6 +1,6 @@
 # Report format
 
-**Status:** draft. Format version 1.6.0.
+**Status:** draft. Format version 1.7.0.
 
 This document is the contract between the freemocap packages, the freemocap app and this
 repository. Each package implements it in its own code. There is no shared code package.
@@ -329,7 +329,7 @@ outside the data of each package.
 
 | Field | Type | Required | Meaning |
 |---|---|---|---|
-| `schema` | string | yes | `skellycertify.report/1.6.0` ([section 8](#8-versioning-of-the-format)). |
+| `schema` | string | yes | `skellycertify.report/1.7.0` ([section 8](#8-versioning-of-the-format)). |
 | `id` | string | no | A version 4 UUID in the lower-case form with hyphens (36 characters), for example `3f2b8c1e-9a4d-4e7b-b6a1-0c5d2e8f7a90`. The package gives it when it saves the report. It is unique in a report file. It holds no time and no data of the system. A version 1 UUID is forbidden, because it holds the MAC address. A report that was not saved can have no `id`. |
 | `package` | object | yes | See [3.2](#32-package). |
 | `kind` | string | yes | `quick`, `full` or `passive` ([7.2](#72-kinds-of-evidence)). `passive` is reserved for a record that the package gathers from normal use ([7.3](#73-the-passive-record-reserved)). Its fields are not yet defined. A writer must not write `passive` in this version. |
@@ -536,7 +536,7 @@ reviewed. A pair that has a reviewed pass does not run. It gets an `ep` item `sk
 
 ```json
 {
- "schema": "skellycertify.report/1.6.0",
+ "schema": "skellycertify.report/1.7.0",
  "id": "3f2b8c1e-9a4d-4e7b-b6a1-0c5d2e8f7a90",
  "package": {"name": "skellytracker", "version": "2024.9.1019",
              "commit": "0123456789abcdef0123456789abcdef01234567", "tree_modified": false},
@@ -725,8 +725,10 @@ Example: `{"code": "camera-wedged", "values": {"camera": "Logitech C922"}}`. The
 
 - A module report that used no test media file gives an empty list or has no `test_media` field.
 - The list has at most 50 items.
-- Each item obeys the privacy rules of [section 6](#6-privacy-rules). Rule 7 also applies to
-  `name`: a `name` that ends with the extension of an image, video or audio file is refused.
+- Each item obeys the privacy rules of [section 6](#6-privacy-rules). The `name` of an item is
+  exempt from rule 7: it can end with the extension of a video file, for example `sample.mp4`. The
+  file is a known file of a package, and its SHA-256 is in the same item. Each other rule applies
+  to `name`. Rule 7 applies to each other field of the item.
 - The relay checks the form of `test_media`. The issue does not show it
   ([ADR-9FHP](decisions/entries/9FHP-format-1-6-0.md)).
 
@@ -738,7 +740,7 @@ One report file holds one JSON object:
 
 | Field | Meaning |
 |---|---|
-| `schema` | `skellycertify.report/1.6.0`. |
+| `schema` | `skellycertify.report/1.7.0`. |
 | `app` | `name`, `version` (SemVer) and `commit` of the app, or `null` for a report of one package that ran alone. |
 | `modules` | A list of module reports. The list holds at least one module report. A package can give more than one module report, for example one for each run. Each module report is independent ([7.1](#71-validity)). |
 | `note` | The one free-text note of the person, or `null`. At most 2000 characters. It must be a clean note (rule 18 of [section 6](#6-privacy-rules)). |
@@ -942,17 +944,17 @@ Note of the person:
 
 ```json
 {
- "schema": "skellycertify.report/1.6.0",
+ "schema": "skellycertify.report/1.7.0",
  "app": {"name": "freemocap", "version": "2.0.0", "commit": "89abcdef0123456789abcdef0123456789abcdef"},
  "modules": [
-  {"schema": "skellycertify.report/1.6.0", "package": {"name": "skellytracker", "...": "..."},
+  {"schema": "skellycertify.report/1.7.0", "package": {"name": "skellytracker", "...": "..."},
    "summary": [
     {"group": "ep", "name": "CUDA", "device": "10de:2484", "result": "skipped", "reason": "reviewed"},
     {"group": "ep", "name": "DirectML", "device": "10de:2484", "result": "pass"},
     {"group": "ep", "name": "CPU", "device": null, "result": "record-only"},
     {"group": "component", "name": "MediaPipe", "device": null, "result": "skipped", "reason": "reviewed"}
    ]},
-  {"schema": "skellycertify.report/1.6.0", "package": {"name": "skellycam", "...": "..."},
+  {"schema": "skellycertify.report/1.7.0", "package": {"name": "skellycam", "...": "..."},
    "summary": [
     {"group": "camera", "name": "Logitech C922", "device": "046d:085c", "result": "partial"},
     {"group": "camera", "name": "Razer Kiyo Pro", "device": "1532:0e05", "result": "skipped", "reason": "busy"}
@@ -1051,7 +1053,10 @@ again ([review.md](review.md)).
 7. No string ends with the extension of an image, video or audio file, in upper case, lower case
    or a mix (for example `.JPG`): `.jpg`, `.jpeg`, `.png`,
    `.bmp`, `.tif`, `.tiff`, `.webp`, `.mp4`, `.avi`, `.mkv`, `.mov`, `.webm`, `.wav`, `.mp3`,
-   `.flac`. The file names of recordings are not in a report.
+   `.flac`. The file names of recordings are not in a report. One exception: the `name` of an
+   item of `test_media` ([3.9](#39-test_media)) is exempt from this rule. The item must be directly
+   in the `test_media` list of a module report. A `test_media` list in another place, for example in
+   `details`, has no exemption.
 8. The Markdown holds no image link (`![`). The report file has no other attached file.
 9. Each `reason` and each item of `evidence.reasons` matches the pattern of
    [5.2](#52-reason-codes).
@@ -1200,6 +1205,13 @@ the capture backend and the OS. Camera evidence is not part of an EP row.
 
 Changes of the format:
 
+- 1.7.0: The `name` of an item of `test_media` is exempt from rule 7 of
+  [section 6](#6-privacy-rules) ([3.9](#39-test_media)). Each other rule still applies to it. This
+  is a minor change. The change does not fix text: a `name` that ends with `.mp4` was invalid
+  in 1.6.0 and is valid now. It adds no field and no code, but it adds an allowed value, and the
+  owner decided that a new allowed value is a minor step. A reader of 1.6.0 refuses such a
+  report, so the schema id must tell the two apart. A reader of major version 1 still accepts a
+  file of 1.6.0 or earlier ([ADR-Q02Y](decisions/entries/Q02Y-test-media-name-exempt-from-rule-7.md)).
 - 1.6.0: `certify()` accepts the keyword-only option `abandon`. When it is set, the run stops as
   for a cancel, and the package stores no result and writes no report file. `abandon` applies when
   `cancel` is also set ([2.4](#24-cancel)). A `component` summary item can have `skipped` with the
@@ -1272,7 +1284,7 @@ These are the only packages of this format.
 
 | Package | Evidence for | `certify()` | Reason codes | Evidence rows |
 |---|---|---|---|---|
-| skellytracker | execution providers (EPs) | `skellytracker.certify` and `skellytracker.certify_plan`, levels `quick` and `full`. Package options: `execution_providers`, `pipeline`. The tool `tools/certify_platform.py` writes a report file of this format (schema 1.6.0; see [3.6](#36-example-skellytracker)). | `skellytracker/REASON_CODES.md` | `skellytracker/core/eps/ep_evidence.yaml` (EPs); this repository for the other sections |
+| skellytracker | execution providers (EPs) | `skellytracker.certify` and `skellytracker.certify_plan`, levels `quick` and `full`. Package options: `execution_providers`, `pipeline`. The tool `tools/certify_platform.py` writes a report file of this format (schema 1.7.0; see [3.6](#36-example-skellytracker)). | `skellytracker/REASON_CODES.md` | `skellytracker/core/eps/ep_evidence.yaml` (EPs); this repository for the other sections |
 | freemocap | the app on an OS: it starts a child process, loads its bundled modules and can write its data folder | `freemocap.certify` and `freemocap.certify_plan`, level `quick`. The level `full` is not built. Package options: `ui_remote`, `blender_exe_path`. | the docstring of `freemocap/certification.py` | none yet |
 | skellycam | cameras ([7.4](#74-camera-evidence)) | not yet implemented | not yet implemented | not yet implemented |
 

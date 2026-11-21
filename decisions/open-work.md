@@ -56,8 +56,8 @@ task. Delete an item when its work is done. The PR that closes an item records t
   skellycam and freemocap must accept the keyword-only option `abandon` of `certify()`
   ([2.4](../report-format.md#24-cancel)). They must write `test_media` for each test media file
   that the checks used ([3.9](../report-format.md#39-test_media)). They must write the schema id
-  `skellycertify.report/1.6.0`, not `skellycertify.report/1.5.0`, when they write the rules of
-  format 1.6.0.
+  `skellycertify.report/1.7.0`, not `skellycertify.report/1.5.0`, when they write the rules of
+  format 1.6.0 and 1.7.0 ([ADR-Q02Y](entries/Q02Y-test-media-name-exempt-from-rule-7.md)).
 - **skellytracker: the GPU memory and the bundled test media
   ([ADR-9FHP](entries/9FHP-format-1-6-0.md)).** Write `shared_memory_bytes` in each item of
   `host.gpus` ([3.3](../report-format.md#33-host)). When the test media folder does not hold a

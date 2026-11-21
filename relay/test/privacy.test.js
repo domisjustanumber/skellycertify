@@ -98,6 +98,27 @@ test('rule 7: media file extensions at the end of a string', () => {
   assert.equal(stringRule('clip.Mp4'), 7, 'case-insensitive');
 });
 
+test('rule 7: the name of a test_media item of a module is exempt (section 3.9)', () => {
+  const item = (name) => ({ name, sha256: 'a'.repeat(64), bytes: 1, source: 'bundled' });
+  const withMedia = (name, extra = {}) => {
+    const d = validData();
+    d.modules[0].test_media = [{ ...item(name), ...extra }];
+    return d;
+  };
+  assert.equal(privacyRule(md, withMedia('sample.mp4')), 0, 'the name passes');
+  assert.equal(privacyRule(md, withMedia('ok.zip', { source: 'x.mp4' })), 7, 'another field of the item');
+  assert.equal(privacyRule(md, withMedia('C:/data/sample.mp4')), 1, 'a path is refused');
+  assert.equal(privacyRule(md, withMedia('x'.repeat(2001) + '.mp4')), 6, 'the length rule applies');
+  assert.equal(privacyRule(md, withMedia('Traceback (most recent call last) a.mp4')), 10);
+  const nested = validData();
+  nested.modules[0].details.test_media = [item('sample.mp4')];
+  assert.equal(privacyRule(md, nested), 7, 'test_media inside details gets no exemption');
+  const other = validData();
+  other.modules[0].details.name = 'sample.mp4';
+  assert.equal(privacyRule(md, other), 7, 'a name elsewhere gets no exemption');
+  assert.equal(privacyRule(['sample.mp4'], withMedia('sample.mp4')), 7, 'the Markdown part');
+});
+
 test('rule 8: image links in the Markdown', () => {
   assert.equal(privacyRule(['text ![a](b)'], validData()), 8);
   assert.equal(inDetails('![in json]'), 0, 'rule 8 is about the Markdown');

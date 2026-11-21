@@ -34,15 +34,15 @@ const isReason = (v) => typeof v === 'string' && REASON_RE.test(v);
 const cleanNote = (s) => !tooLong(s) && NOTE_RE.test(s) && !LINK_RE.test(s);
 
 // The lowest rule number (1 to 10) that one string breaks, or 0. A string that breaks rule 6 gives
-// 6 at once: no pattern runs on it.
-export function stringRule(s) {
+// 6 at once: no pattern runs on it. mediaName: the name of a test_media item, exempt from rule 7.
+export function stringRule(s, mediaName = false) {
   if (tooLong(s)) return 6;
   if (PATH_RE.test(s)) return 1;
   if (PCI_RE.test(s)) return 3;
   if (MAC_RE.test(s)) return 4;
   if (EMAIL_RE.test(s)) return 5;
   const lower = s.toLowerCase();
-  if (MEDIA_EXT.some((e) => lower.endsWith(e))) return 7;
+  if (!mediaName && MEDIA_EXT.some((e) => lower.endsWith(e))) return 7;
   if (s.includes(TRACEBACK)) return 10;
   return 0;
 }
@@ -81,7 +81,10 @@ export function duplicateKey(json) {
 // markdownLines: the lines before the json block. data: the parsed JSON object. json: its text.
 export function privacyRule(markdownLines, data, json = '') {
   let best = 0;
+  const modules = Array.isArray(data?.modules) ? data.modules : [];
   const take = (r) => { if (r && (!best || r < best)) best = r; };
+  // The items of test_media directly in a module (section 3.9): their name is exempt from rule 7.
+  const mediaItems = new Set(modules.flatMap((m) => (Array.isArray(m?.test_media) ? m.test_media : [])));
   const walk = (v) => {
     if (typeof v === 'string') take(stringRule(v));
     else if (Array.isArray(v)) v.forEach(walk);
@@ -89,7 +92,8 @@ export function privacyRule(markdownLines, data, json = '') {
       for (const [k, child] of Object.entries(v)) {
         take(PRIVATE_KEYS.has(k.toLowerCase()) ? 2 : stringRule(k));
         if (k === 'reason' && child !== null && !isReason(child)) take(9);
-        walk(child);
+        if (k === 'name' && typeof child === 'string' && mediaItems.has(v)) take(stringRule(child, true));
+        else walk(child);
       }
     }
   };
@@ -101,7 +105,7 @@ export function privacyRule(markdownLines, data, json = '') {
     if (r !== 6 && IPV4_RE.test(line)) take(20);
   }
   walk(data);
-  for (const m of Array.isArray(data?.modules) ? data.modules : []) {
+  for (const m of modules) {
     const reasons = m?.evidence?.reasons;
     if (Array.isArray(reasons) && !reasons.every(isReason)) take(9);
   }
