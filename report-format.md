@@ -390,156 +390,183 @@ checks that each roll-up check requires. Each test of the group keeps its own ch
 
 ### 3.6 Example: skellytracker
 
-This is the layout of skellytracker for the level `quick`. The level `full` has the same layout
-and more checks (see "Level `full`" below). The layout of `details` is the layout of the package.
-The CPU name, the commit and the id are example values.
+This is the layout of skellytracker for the levels `quick` and `full`. The layout of `details` is
+the layout of the package. The CPU name, the commit and the id are example values.
 
 One report is one `certify()` call. It covers each selected pair of an execution provider (EP) and
 a GPU. An EP that was not selected is not in the report. A selected pair that cannot run has the
 result `not-run`, with a reason such as `ep-not-installed`, `gpu-not-usable` or `not-gpu-ep`.
 
+**Names.**
+
 - The label of a pair is `<ep>@<device>`, for example `cuda@10de-2484-0`. It is the plain `<ep>`
   for an EP with no GPU and for `coreml`.
-- A check name with no `:` is the row of the pair. The pair check `<label>` is a roll-up check
-  ([3.4](#34-check)). It passes only when its `probe` and `image` checks pass.
-- The quick layout of skellytracker will change: session checks will take the place of the `image`
-  check. This section follows when that code has landed.
-- The other checks of a pair are `<label>:probe` and `<label>:image`. For `cuda` and `trt-rtx` on a
-  GPU there are also `<label>:jpeg-decode` and `<label>:jpeg-preprocess` (level `quick`).
-- `details.eps.<label>` holds `gpu` (the GPU id, for example `10de:2484`, `chip:<slug>` for
-  `coreml`, or `null`), `device` (the device key or `null`; the full form, for example
-  `gpu:10de:2484:0`, not the short form of the label), `models`, `warnings` and `pack_version`.
-  `models` and `warnings` are there only when the image run gave them. A pair that is `not-run`, or
-  whose probe failed, has neither. Each item of `models` is an object with `key`, `version`, `size`,
-  `precision`, `execution_provider` and `device`. `warnings` is a sorted list of warning codes.
-  `pack_version` is `builtin` for a built-in EP (`directml`, `coreml`, `cpu`). For an EP of the
-  Windows ML catalog it is the package version of the Windows ML record (or `windows-ml`). For a
-  plugin pack it is the pack version, for example `0.2.0`. `pack_version` is optional. Older
-  reports of level `quick` do not have it.
-- A pair whose EP has a plugin pack also has two facts of the installed pack in `details.eps.<label>`:
-  `installed_pack_version` (the `version` of the manifest `pack.json` of the installed pack in the
-  EP store) and `wheels_match_lock` (a boolean: `true` when the sha256 values of the wheels that the
-  install recorded in `pack.json` are exactly the sha256 values of the lock of the catalog for that
-  pack). Both are absent for a built-in EP, for an EP of the Windows ML catalog, and when the pack
-  has no manifest. The match compares the hashes that were recorded at install time. It does not read
-  a wheel again and does not hash the unpacked files. The store checks each unpacked file by presence
-  and size: a pack with a missing file or a file of another size is not usable, and its pair is
-  `not-run` with `ep-files`. A file that was changed with the same size is not found.
-- The quick check compares a GPU EP with the CPU EP. `cpu` is not in the default selection. When a
-  caller names it, its checks `cpu:probe`, `cpu:image` and `cpu` are all `not-run` with the reason
-  `not-gpu-ep`. Its `details.eps.cpu` is `{"gpu": null, "device": null, "pack_version": "builtin"}`,
-  with no `models` and no `warnings`.
-- A check can also have `numbers`, for example `seconds`, `max_abs_diff`, `ep_ms`, `cpu_ms`,
-  `speed_against_cpu` and `exit_code`.
+- The checks of a pair are `<label>:probe`, `<label>:video` and `<label>:live`. `video` and `live`
+  are sessions of the running modes video and live.
+- The pair check `<label>` has no `:` in its name. It is a roll-up check ([3.4](#34-check)). It is
+  `pass` only when `<label>:probe`, `<label>:video` and `<label>:live` are `pass`. A timing or a
+  JPEG check never changes it.
+- For `cuda` and `trt-rtx` on a GPU, level `quick` also has `<label>:jpeg-decode` and
+  `<label>:jpeg-preprocess`.
+- The CPU EP has no pair row. Its checks are `cpu:video` and `cpu:live`, with `module` `CPU`.
 - A child process that gave its result and did not exit cleanly adds a row `<name>:exit` with the
   result `record-only` and the reason `hung-at-exit` or `crashed`.
-- `cuda@...` uses a plugin pack (`0.2.0`). `cuda` and `trt-rtx` pairs keep the two jpeg rows.
-  `directml` has no jpeg rows.
-- `details.versions` gives the versions one time for the report, not for each EP.
-- The name and the driver version of a GPU are only in `host.gpus`. Join `host.gpus[].id` with
-  `details.eps.<label>.gpu`. Two GPUs of one model have the same id.
-- `summary` ([3.7](#37-summary)) has one `ep` item for each pair that ran. A pair that is `not-run`
-  has no item. The result of an `ep` item is the result of the row of the pair (`<label>`). The CPU
-  EP of a full report has no such row. skellytracker decides the result of its item. A pair that
-  `quick` skips because it has a reviewed row has an `ep` item with the result `skipped` and the
-  reason `reviewed`.
-- skellytracker adds a `gpu-jpeg` item only when a GPU JPEG decode test ran for that pair.
-  skellytracker decides the result of that item.
+- `module` of each check of a pair, of its JPEG rows and of its `<name>:exit` row is the EP name,
+  for example `TensorRT RTX`. A `suite:*` check has no `module`.
+- A check can have `numbers`, for example `seconds`, `frames`, `ep_ms`, `cpu_ms`,
+  `max_abs_diff`, `speed_against_cpu` and `exit_code`.
 
-```json
-{
- "schema": "skellycertify.report/1.4.0",
- "id": "3f2b8c1e-9a4d-4e7b-b6a1-0c5d2e8f7a90",
- "package": {"name": "skellytracker", "version": "2.0.0", "commit": "0123456789abcdef0123456789abcdef01234567",
-             "tree_modified": false},
- "kind": "quick",
- "created_utc": "2026-11-19T10:00:00Z",
- "host": {
-  "os": {"name": "Windows", "release": "11", "version": "10.0.26300", "build": 26300,
-         "label": "Windows 11 Home 26H2", "arch": "x86_64"},
-  "cpu": {"name": "Example 8-Core Processor"},
-  "memory_bytes": 34359738368,
-  "gpus": [
-   {"vendor": "nvidia", "name": "NVIDIA GeForce RTX 3070", "id": "10de:2484", "driver_version": "610.88",
-    "vram_bytes": 8589934592}
-  ]
- },
- "summary": [
-  {"group": "ep", "name": "CUDA", "device": "10de:2484", "result": "pass"},
-  {"group": "gpu-jpeg", "name": "CUDA", "device": "10de:2484", "result": "pass"},
-  {"group": "ep", "name": "DirectML", "device": "10de:2484", "result": "pass"}
- ],
- "checks": [
-  {"name": "cuda@10de-2484-0:probe", "result": "pass", "reason": null},
-  {"name": "cuda@10de-2484-0:image", "result": "pass", "reason": null},
-  {"name": "cuda@10de-2484-0:jpeg-decode", "result": "pass", "reason": null},
-  {"name": "cuda@10de-2484-0:jpeg-preprocess", "result": "pass", "reason": null},
-  {"name": "cuda@10de-2484-0", "result": "pass", "reason": null},
-  {"name": "directml@10de-2484-0:probe", "result": "pass", "reason": null},
-  {"name": "directml@10de-2484-0:image", "result": "pass", "reason": null},
-  {"name": "directml@10de-2484-0", "result": "pass", "reason": null}
- ],
- "cleanup": [],
- "details": {
-  "pipeline": "yolox-rtmw-wholebody@skellytracker",
-  "eps": {
-   "cuda@10de-2484-0": {"gpu": "10de:2484", "device": "gpu:10de:2484:0",
-                        "models": [{"key": "yolox-m", "version": "1.0.0", "size": "m", "precision": "fp16",
-                                    "execution_provider": "cuda", "device": "gpu:10de:2484:0"}],
-                        "warnings": [], "pack_version": "0.2.0",
-                        "installed_pack_version": "0.2.0", "wheels_match_lock": true},
-   "directml@10de-2484-0": {"gpu": "10de:2484", "device": "gpu:10de:2484:0",
-                            "models": [{"key": "yolox-m", "version": "1.0.0", "size": "m", "precision": "fp16",
-                                        "execution_provider": "directml", "device": "gpu:10de:2484:0"}],
-                            "warnings": [], "pack_version": "builtin"}
-  },
-  "versions": {"ort_distribution": "onnxruntime-windowsml", "ort_version": "1.30.0", "windowsml": "2.6.74rc0",
-               "catalog_revision": "<64 hex digits>",
-               "set_hash": "4abfaa7678817ed4a8ccb5f3e355ba28672589e8a3468bb6805e491dfe03a302"},
-  "scrub": {"exempted_terms": 0}
- },
- "evidence": {"valid": true, "reasons": []}
-}
-```
+**Level `quick`.** The quick run has a limit of 75 seconds. A check that does not fit in it is
+`not-run` with `over-budget`. The CPU EP runs only as the reference for a pair that is not
+reviewed. A pair that has a reviewed pass does not run. It gets an `ep` item `skipped` with
+`reviewed`. A quick run in which each pair is reviewed runs no check. Its evidence reason is
+`no-check`.
 
-**Level `full`.** The layout is the same as for `quick`: flat `checks`, no sections, the same
-`details.eps` and `details.versions`. A full report adds
-`details.full`: `{"camera_counts": [1, 3, 6], "warmup_calls": 10, "timed_calls": 100, "running_mode": "video"}`.
-A full run writes a report file. skellytracker uses the `id` also as the file name and as the
-hand-in id. Older files of schema 1.0.0 stay readable and have no `id`.
+**Level `full`.** The layout is the same: flat `checks`, no sections, the same `details.eps` and
+`details.versions`. The order of the checks:
 
-The order of the checks of a full report:
-
-1. The CPU EP first, with no row of its own: `cpu:pipeline-1`, `cpu:pipeline-3`, `cpu:pipeline-6`,
-   `cpu:jpeg`, then `cpu:jpeg:<name>` for each check of the JPEG certification.
-2. Then each pair, with the same labels as `quick`: `<label>:probe`, `<label>:image`,
-   `<label>:pipeline-1`, `<label>:pipeline-3`, `<label>:pipeline-6`, `<label>:jpeg`, each
-   `<label>:jpeg:<name>`, then `<label>`. A full report has no `<label>:jpeg-decode` and no
-   `<label>:jpeg-preprocess`.
+1. The CPU reference: `cpu:video` and `cpu:live`.
+2. Each pair with no reviewed pass, on the GPU that the package recommends: `<label>:probe`,
+   `<label>:video`, `<label>:live`, `<label>:pipeline-1`, `<label>:pipeline-3`,
+   `<label>:pipeline-6`, `<label>:jpeg`, each `<label>:jpeg:<name>`, then `<label>`.
+3. The CPU timings: `cpu:pipeline-1`, `cpu:pipeline-3`, `cpu:pipeline-6`, `cpu:jpeg` and each
+   `cpu:jpeg:<name>`.
+4. The other pairs.
 
 - `<x>:pipeline-<n>` is the timing of the pipeline at `<n>` cameras. Its result is `record-only`.
   Its `numbers` are `cameras`, `start_seconds`, `first_call_ms`, `calls`, `median_ms`, `p95_ms`,
   `vram_before_mib` and `peak_vram_mib` (`null` when there is no VRAM reader). A pair on a GPU also
   has `against_cpu` and `speed_against_cpu`.
 - A timing is `not-run` with the class name of an exception as the reason when the run raised, for
-  example when there is no VRAM at 6 cameras. It is `not-run` with `image-not-passed` when the image
-  check did not pass, and with `models-missing` on the CPU EP when a model file is absent. It is
+  example when there is no VRAM at 6 cameras. It is `not-run` with `video-not-passed` when the
+  check `<label>:video` did not pass, and with `models-missing` on the CPU EP when a model file is absent. It is
   `fail` with `crashed` or `timed-out` when the child process died.
 - `<x>:jpeg` is the outcome of the JPEG checks. It is `fail`, with the reason of the first failed
   check, when a check failed. Else it is `pass` when a check passed. Else it is `not-run` with
-  `no-check`. It is `not-run` with `probe-not-passed` when the probe did not pass. It exists only for
-  `cuda`, `trt-rtx`, `directml`, `amdgpu` and `migraphx` on a GPU.
-- `<x>:jpeg:<name>` is one check of the JPEG certification, for example `cpu_decode.baseline_420` or
-  `gpu_decode.baseline_422`. There are about 70 names for each target today. The result is `pass`,
-  `fail`, `not-run` or `record-only`. The reason keeps the code of the JPEG module, with
-  underscores, for example `ep_not_present`, `no_gpu_decode_on_ep` or `over_limit`.
-- `<name>:exit` rows are as in `quick`.
-- `<label>` passes when its `probe` and `image` pass. A timing or a JPEG check never changes it.
-- A named `cpu` pair is still the three rows `cpu:probe`, `cpu:image` and `cpu`, all `not-run` with
-  `not-gpu-ep`.
-- With no EP named, `full` also takes a pair that has a reviewed row. `quick` skips such a pair.
-  With no EP at all, `full` still runs the CPU checks. For `certify("full")`, it installs nothing
-  and it downloads only the test image.
+  `no-check`. It exists for `cpu` and for `cuda`, `trt-rtx`, `directml`, `amdgpu` and `migraphx`
+  on a GPU.
+- `<x>:jpeg:<name>` is one check of the JPEG certification, for example `cpu_decode.baseline_420`,
+  `gpu_decode.baseline_422` or `preprocess_graph.yolox_person`. There are 66 names for each target
+  today. The result is `pass`, `fail`, `not-run` or `record-only`. The reason keeps the code of the
+  JPEG module, with underscores, for example `ep_not_present`, `no_gpu_decode_on_ep` or
+  `over_limit`. A report of `directml` shows `no_gpu_decode_on_ep` for each `gpu_decode` name.
+- A full report has no `<label>:jpeg-decode` and no `<label>:jpeg-preprocess`.
+- With no EP at all, `full` still runs the CPU checks. For `certify("full")`, it installs nothing
+  and it downloads only the test image. It reads `<sha256>.zip` in `test_media_dir`
+  ([2.8](#28-the-test-media-folder)).
+
+**`details`.**
+
+- `details.eps.<label>` holds `gpu` (the GPU id, for example `10de:2484`, `chip:<slug>` for
+  `coreml`, or `null`), `device` (the device key or `null`; the full form, for example
+  `gpu:10de:2484:0`, not the short form of the label), `models`, `warnings` and `pack_version`.
+  `models` and `warnings` are there only when the session run gave them. A pair that is `not-run`,
+  or whose probe failed, has neither. Each item of `models` is an object with `key`, `version`,
+  `size`, `precision`, `execution_provider` and `device`. `warnings` is a sorted list of warning
+  codes. `pack_version` is `builtin` for a built-in EP (`directml`, `coreml`, `cpu`). For an EP of
+  the Windows ML catalog it is the package version of the Windows ML record (or `windows-ml`). For
+  a plugin pack it is the pack version, for example `0.2.0`. The CPU EP has no entry in
+  `details.eps` in a full report.
+- A pair whose EP has a plugin pack also has two facts of the installed pack in
+  `details.eps.<label>`: `installed_pack_version` (the `version` of the manifest `pack.json` of the
+  installed pack in the EP store) and `wheels_match_lock` (a boolean: `true` when the sha256 values
+  of the wheels that the install recorded in `pack.json` are exactly the sha256 values of the lock
+  of the catalog for that pack). Both are absent for a built-in EP, for an EP of the Windows ML
+  catalog, and when the pack has no manifest. The match compares the hashes that were recorded at
+  install time. It does not read a wheel again and does not hash the unpacked files. The store
+  checks each unpacked file by presence and size: a pack with a missing file or a file of another
+  size is not usable, and its pair is `not-run` with `ep-files`. A file that was changed with the
+  same size is not found.
+- `details.versions` gives the versions one time for the report, not for each EP.
+- `details.full` is `{"camera_counts": [1, 3, 6], "warmup_calls": 10, "timed_calls": 100,
+  "running_mode": "video"}` in a full report.
+- `details.skipped` is an object. It is empty when no pair was skipped.
+- The name and the driver version of a GPU are only in `host.gpus`. Join `host.gpus[].id` with
+  `details.eps.<label>.gpu`. Two GPUs of one model have the same id.
+
+**`summary`** ([3.7](#37-summary)):
+
+- One `ep` item for each pair that ran. A pair that is `not-run` has no item. The result of an
+  `ep` item is the result of the row of the pair (`<label>`). skellytracker decides the result of
+  its item. The CPU EP has the item `CPU` with `device` `null` and the result `record-only`. A pair
+  that `quick` skips because it has a reviewed row has an `ep` item with the result `skipped` and
+  the reason `reviewed`.
+- A `gpu-jpeg` item only when a GPU JPEG decode test ran for that pair. A report of `directml`
+  has none. skellytracker decides the result of that item.
+- `benchmark` items of a full report. They come after the `ep` item of the CPU. Each has `stage`
+  `pipeline-<n>` for `n` cameras (1, 3 and 6), for the pair and for the CPU.
+  skellytracker writes `ms_per_frame` as the median time of one call that holds one frame of each
+  of the `n` cameras (`median_ms` of the `pipeline-<n>` check), and `fps` as 1000 divided by
+  `ms_per_frame`.
+
+```json
+{
+ "schema": "skellycertify.report/1.4.0",
+ "id": "3f2b8c1e-9a4d-4e7b-b6a1-0c5d2e8f7a90",
+ "package": {"name": "skellytracker", "version": "2024.9.1019",
+             "commit": "0123456789abcdef0123456789abcdef01234567", "tree_modified": false},
+ "kind": "full",
+ "created_utc": "2026-11-21T00:21:01Z",
+ "host": {
+  "os": {"name": "Windows", "release": "11", "version": "10.0.26300", "build": 26300,
+         "label": "Windows 11 Home 26H2", "arch": "x86_64"},
+  "cpu": {"name": "Intel(R) Core(TM) i7-14700K"},
+  "memory_bytes": 68388003840,
+  "gpus": [
+   {"vendor": "nvidia", "name": "NVIDIA GeForce RTX 3070", "id": "10de:2484", "driver_version": "610.88",
+    "vram_bytes": 8589934592}
+  ]
+ },
+ "summary": [
+  {"group": "ep", "name": "DirectML", "device": "10de:2484", "result": "pass"},
+  {"group": "ep", "name": "CPU", "device": null, "result": "record-only"},
+  {"group": "benchmark", "name": "DirectML", "device": "10de:2484", "stage": "pipeline-1",
+   "ms_per_frame": 3.44, "fps": 290.7},
+  {"group": "benchmark", "name": "CPU", "device": null, "stage": "pipeline-1",
+   "ms_per_frame": 16.08, "fps": 62.2}
+ ],
+ "checks": [
+  {"name": "cpu:video", "result": "pass", "reason": null, "module": "CPU",
+   "numbers": {"frames": 30, "cpu_ms": 16.1, "seconds": 5.0}},
+  {"name": "directml@10de-2484-0:probe", "result": "pass", "reason": null, "module": "DirectML",
+   "numbers": {"seconds": 1.2, "max_abs_diff": 9.5367431640625e-07}},
+  {"name": "directml@10de-2484-0:live", "result": "pass", "reason": null, "module": "DirectML",
+   "numbers": {"frames": 30, "ep_ms": 3.3}},
+  {"name": "directml@10de-2484-0:pipeline-1", "result": "record-only", "reason": null, "module": "DirectML",
+   "numbers": {"cameras": 1, "start_seconds": 1.44, "first_call_ms": 24.8, "calls": 100, "median_ms": 3.44,
+               "p95_ms": 3.65, "vram_before_mib": 0, "peak_vram_mib": 279, "against_cpu": 0.21,
+               "speed_against_cpu": "faster"}},
+  {"name": "directml@10de-2484-0:jpeg:gpu_decode.baseline_420", "result": "not-run",
+   "reason": "no_gpu_decode_on_ep", "module": "DirectML"},
+  {"name": "directml@10de-2484-0", "result": "pass", "reason": null, "module": "DirectML"},
+  {"name": "cpu:pipeline-1", "result": "record-only", "reason": null, "module": "CPU",
+   "numbers": {"cameras": 1, "start_seconds": 1.25, "first_call_ms": 122.0, "calls": 100, "median_ms": 16.08,
+               "p95_ms": 17.85, "vram_before_mib": 0, "peak_vram_mib": 0}}
+ ],
+ "cleanup": [],
+ "details": {
+  "pipeline": "yolox-rtmw-wholebody@skellytracker",
+  "eps": {
+   "directml@10de-2484-0": {"gpu": "10de:2484", "device": "gpu:10de:2484:0", "pack_version": "builtin",
+                            "models": [{"key": "yolox-person@openmmlab-exporter", "version": "0.1.0",
+                                        "size": "m", "precision": "fp16", "execution_provider": "directml",
+                                        "device": "gpu:10de:2484:0"}],
+                            "warnings": ["batch_limited_by_state"]}
+  },
+  "full": {"camera_counts": [1, 3, 6], "warmup_calls": 10, "timed_calls": 100, "running_mode": "video"},
+  "versions": {"ort_distribution": "onnxruntime-windowsml", "ort_version": "1.30.0.202609102321",
+               "windowsml": "2.6.74rc0", "catalog_revision": "<64 hex digits>",
+               "set_hash": "4abfaa7678817ed4a8ccb5f3e355ba28672589e8a3468bb6805e491dfe03a302"},
+  "skipped": {},
+  "scrub": {"exempted_terms": 0}
+ },
+ "evidence": {"valid": true, "reasons": []}
+}
+```
+
+The example shows 7 of the many checks of a real full report. It shows one of two `models` items.
+A full run writes a report file. skellytracker uses the `id` also as the file name and as the
+hand-in id. Older files of schema 1.0.0 stay readable and have no `id`.
 
 **The tool `tools/certify_platform.py`.**
 
@@ -1118,7 +1145,7 @@ These are the only packages of this format.
 
 | Package | Evidence for | `certify()` | Reason codes | Evidence rows |
 |---|---|---|---|---|
-| skellytracker | execution providers (EPs) | `skellytracker.certify` and `skellytracker.certify_plan`, levels `quick` and `full`. Package options: `execution_providers`, `pipeline`. The tool `tools/certify_platform.py` writes a report file of this format (schema 1.1.0; see [3.6](#36-example-skellytracker)). | `skellytracker/REASON_CODES.md` | `skellytracker/core/eps/ep_evidence.yaml` (EPs); this repository for the other sections |
+| skellytracker | execution providers (EPs) | `skellytracker.certify` and `skellytracker.certify_plan`, levels `quick` and `full`. Package options: `execution_providers`, `pipeline`. The tool `tools/certify_platform.py` writes a report file of this format (schema 1.4.0; see [3.6](#36-example-skellytracker)). | `skellytracker/REASON_CODES.md` | `skellytracker/core/eps/ep_evidence.yaml` (EPs); this repository for the other sections |
 | freemocap | the app on an OS: it starts a child process, loads its bundled modules and can write its data folder | `freemocap.certify` and `freemocap.certify_plan`, level `quick`. The level `full` is not built. Package options: `ui_remote`, `blender_exe_path`. | the docstring of `freemocap/certification.py` | none yet |
 | skellycam | cameras ([7.4](#74-camera-evidence)) | not yet implemented | not yet implemented | not yet implemented |
 

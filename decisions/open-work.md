@@ -37,12 +37,9 @@ task. Delete an item when its work is done. The PR that closes an item records t
   ([3.8](../report-format.md#38-notices)). Show the `risks` of each plan at the consent. Do not
   offer a run of a level when the `total` of each plan is 0
   ([2.6](../report-format.md#26-the-plan-function)).
-- **skellytracker: `over-budget` and the 3.6 layout
-  ([ADR-V1TR](entries/V1TR-format-1-4-0.md)).** Give a check that did not run because the time limit
-  of the level was used up the result `not-run` with `over-budget`
-  ([5.3](../report-format.md#53-common-reason-codes)). When the session checks of the quick layout
-  have landed in skellytracker, update the layout of
-  [3.6](../report-format.md#36-example-skellytracker) in this repository.
+- **skellytracker: `over-budget` ([ADR-V1TR](entries/V1TR-format-1-4-0.md)).** Give a check that
+  did not run because the time limit of the level was used up the result `not-run` with
+  `over-budget` ([5.3](../report-format.md#53-common-reason-codes)).
 - **skellytracker: write format 1.3.0
   ([ADR-F1KN](entries/F1KN-format-1-2-0-markdown-layout-revised.md),
   [ADR-D1PW](entries/D1PW-format-1-3-0.md)).** In the module report of `certify()`, fill `summary`
