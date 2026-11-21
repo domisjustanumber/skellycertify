@@ -79,3 +79,4 @@ task. Delete an item when its work is done. The PR that closes an item records t
   files of a successful full run by default ([2.8](../report-format.md#28-the-test-media-folder)).
   After the app or a package process ends early, write the report from the stages that finished,
   with `interrupted` ([2.5](../report-format.md#25-runtime-rules)).
+- **The passive record: wait for the owner (ADR-M8E0).** The design waits for the answers of the owner to round 2 (Q15 to Q24). Nothing of it is in [`report-format.md`](../report-format.md) yet. Read [ADR-M8E0](entries/M8E0-passive-record-design.md).

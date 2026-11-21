@@ -36,6 +36,7 @@ These entries wait for a decision of the user. Section is the section or area of
 
 | # | Decision | Section | Status |
 |---|----------|---------|--------|
+| [M8E0](entries/M8E0-passive-record-design.md) | The passive record: design so far (13 settled points) and open questions Q15 to Q24 | `passive_record` | proposed |
 
 The entries that are `rejected`, `superseded by XXXX`, `absorbed into <path>#<anchor>`,
 `evidence; used by XXXX` or `done` are in [historical.md](historical.md).
