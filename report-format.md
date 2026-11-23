@@ -493,7 +493,9 @@ checks that each roll-up check requires. Each test of the group keeps its own ch
 ### 3.6 Example: skellytracker
 
 This is the layout of skellytracker for the levels `quick` and `full`. The layout of `details` is
-the layout of the package. The CPU name, the commit and the id are example values.
+the layout of the package. The values of the example come from the first full report of
+skellytracker in this format, of 2026-11-23. The id, the commit and `created_utc` are example
+values.
 
 One report is one `certify()` call. It covers each selected pair of an execution provider (EP) and
 a GPU. An EP that was not selected is not in the report. A selected pair that cannot run has the
@@ -512,7 +514,9 @@ pair can never have is not in the report, for example a probe against the CPU fo
   JPEG check never changes it.
 - For `cuda` and `trt-rtx` on a GPU, level `quick` also has `<label>:jpeg-decode` and
   `<label>:jpeg-preprocess`.
-- The CPU EP has no pair row. Its checks are `cpu:video` and `cpu:live`, with `module` `CPU`.
+- The CPU EP has no pair row and no `cpu:probe`. Its checks are `cpu:video` and `cpu:live`. At the
+  level `full`, it also has its timings and its JPEG checks. Each of these checks has the `module`
+  `CPU`.
 - A child process that gave its result and did not exit cleanly adds a row `<name>:exit` with the
   result `record-only` and the reason `hung-at-exit` or `crashed`.
 - `module` of each check of a pair, of its JPEG rows and of its `<name>:exit` row is the EP name,
@@ -522,6 +526,9 @@ pair can never have is not in the report, for example a probe against the CPU fo
   frames or of timed calls, is in `details` one time, not in `numbers`. A value that a reader can
   compute from the other numbers of the row is not in `numbers`
   ([5.8](#58-what-a-check-writes) rule 6).
+- `seconds` in `numbers` is the time of the child process of the check. In a full report, these
+  checks have it: `cpu:video`, each `<label>:probe`, `<label>:video` and `<label>:live`, each
+  timing and each `<x>:jpeg`.
 
 **Level `quick`.** The quick run has a limit of 65 seconds. A check that does not fit in it is
 `not-run` with `over-budget`. The CPU EP runs only as the reference for a pair that is not
@@ -541,9 +548,10 @@ reviewed. A pair that has a reviewed pass does not run. It gets an `ep` item `sk
 4. The other pairs.
 
 - `<x>:pipeline-<n>` is the timing of the pipeline at `<n>` cameras. Its result is `record-only`.
-  Its `numbers` are `cameras`, `start_seconds`, `first_call_ms`, `median_ms`, `p95_ms`,
-  `vram_before_mib` and `peak_vram_mib` (`null` when there is no VRAM reader). A pair on a GPU also
-  has `against_cpu`. The count of timed calls is `details.full.timed_calls`.
+  Its `numbers` are `start_seconds`, `first_call_ms`, `median_ms`, `p95_ms`, `peak_vram_mib`
+  (`null` on the CPU EP and when there is no VRAM reading) and `seconds`. The name gives the count
+  of cameras. A pair on a GPU also has `against_cpu`: its `median_ms` divided by the `median_ms` of
+  `cpu:pipeline-<n>`. The count of timed calls is `details.full.timed_calls`.
 - A timing is `not-run` with the class name of an exception as the reason when the run raised, for
   example when there is no VRAM at 6 cameras. It is `not-run` with `video-not-passed` when the
   check `<label>:video` did not pass, and with `models-missing` on the CPU EP when a model file is absent. It is
@@ -559,12 +567,16 @@ reviewed. A pair that has a reviewed pass does not run. It gets an `ep` item `sk
   The result is `pass`, `fail`, `not-run` or `record-only`. The reason keeps the code of the JPEG
   module, with underscores, for example `ep_not_present` or `over_limit`. A report of `directml`
   has no `gpu_decode` name, because DirectML has no GPU JPEG decode.
+- `preprocess_graph_amd_ep.frame_upload` and `preprocess_graph_amd_ep.output_binding_forms` run
+  only on a dedicated GPU ([5.8](#58-what-a-check-writes) rule 8). So `directml` on an integrated
+  GPU has no row of these two names.
 - A full report has no `<label>:jpeg-decode` and no `<label>:jpeg-preprocess`.
 - With no EP at all, `full` still runs the CPU checks. For `certify("full")`, it installs nothing
   and it downloads only the test image. It reads `<sha256>.zip` in `test_media_dir`
   ([2.8](#28-the-test-media-folder)).
 - `test_media` lists the test frames file of the package, `quick_frames.zip`, when a check used it
   ([3.9](#39-test_media)).
+- The module report has `seconds`, the length of the whole run ([3.1](#31-fields)).
 
 **`details`.**
 
@@ -572,12 +584,12 @@ reviewed. A pair that has a reviewed pass does not run. It gets an `ep` item `sk
   `coreml`, or `null`), `device` (the device key or `null`; the full form, for example
   `gpu:10de:2484:0`, not the short form of the label), `models`, `warnings` and `pack_version`.
   `models` and `warnings` are there only when the session run gave them. A pair that is `not-run`,
-  or whose probe failed, has neither. Each item of `models` is an object with `key`, `version`,
-  `size`, `precision`, `execution_provider` and `device`. `warnings` is a sorted list of warning
-  codes. `pack_version` is `builtin` for a built-in EP (`directml`, `coreml`, `cpu`). For an EP of
-  the Windows ML catalog it is the package version of the Windows ML record (or `windows-ml`). For
-  a plugin pack it is the pack version, for example `0.2.0`. The CPU EP has no entry in
-  `details.eps` in a full report.
+  or whose probe failed, has neither. `models` is an object. Its keys are the model keys of
+  `details.models`. Each value holds only the fields of the model that differ for the pair, for
+  example `precision`. `warnings` is a sorted list of warning codes. `pack_version` is `builtin`
+  for a built-in EP (`directml`, `coreml`, `cpu`). For an EP of the Windows ML catalog it is the
+  package version of the Windows ML record (or `windows-ml`). For a plugin pack it is the pack
+  version, for example `0.2.0`. The CPU EP has no entry in `details.eps` in a full report.
 - A pair whose EP has a plugin pack also has two facts of the installed pack in
   `details.eps.<label>`: `installed_pack_version` (the `version` of the manifest `pack.json` of the
   installed pack in the EP store) and `wheels_match_lock` (a boolean: `true` when the sha256 values
@@ -588,7 +600,11 @@ reviewed. A pair that has a reviewed pass does not run. It gets an `ep` item `sk
   checks each unpacked file by presence and size: a pack with a missing file or a file of another
   size is not usable, and its pair is `not-run` with `ep-files`. A file that was changed with the
   same size is not found.
-- `details.versions` gives the versions one time for the report, not for each EP.
+- `details.models` gives `key`, `version` and `size` of each model one time.
+- `details.versions` gives the versions one time for the report, not for each EP. `python` is
+  `<major>.<minor>`, for example `3.13`. A full report also has `numpy` and `opencv`.
+- `details.thresholds` gives the thresholds of the session checks, and `details.frames` the count of
+  the test frames. `details.jpeg` gives each number that is the same in each row of a JPEG check.
 - `details.full` is `{"camera_counts": [1, 3, 6], "warmup_calls": 10, "timed_calls": 100,
   "running_mode": "video"}` in a full report.
 - `details.skipped` is an object. It is empty when no pair was skipped.
@@ -604,9 +620,10 @@ reviewed. A pair that has a reviewed pass does not run. It gets an `ep` item `sk
   the reason `reviewed`.
 - A `gpu-jpeg` item only when a GPU JPEG decode test ran for that pair. A report of `directml`
   has none. skellytracker decides the result of that item.
-- A `component` item `MediaPipe` with `device` `null` for the check `mediapipe:smoke` of the
-  MediaPipe library. That check has `module` `MediaPipe`. When `quick` skips the check because it
-  has a reviewed pass, the item has the result `skipped` and the reason `reviewed`
+- Only at the level `quick`: a `component` item `MediaPipe` with `device` `null` for the check
+  `mediapipe:smoke` of the MediaPipe library. A full report has no such check and no such item.
+  That check has `module` `MediaPipe`. When `quick` skips the check because it has a reviewed pass,
+  the item has the result `skipped` and the reason `reviewed`
   ([ADR-VV80](decisions/entries/VV80-format-1-5-0.md)).
 - `benchmark` items of a full report. They come after the `ep` item of the CPU. Each has `stage`
   `pipeline-<n>` for `n` cameras (1, 3 and 6), for the pair and for the CPU.
@@ -622,38 +639,41 @@ reviewed. A pair that has a reviewed pass does not run. It gets an `ep` item `sk
              "commit": "0123456789abcdef0123456789abcdef01234567", "tree_modified": false},
  "kind": "full",
  "created_utc": "2026-11-21T00:21:01Z",
+ "seconds": 228.0,
  "host": {
   "os": {"name": "Windows", "release": "11", "version": "10.0.26300", "build": 26300,
          "label": "Windows 11 Home 26H2", "arch": "x86_64"},
   "cpu": {"name": "Intel(R) Core(TM) i7-14700K"},
   "memory_bytes": 68387078144,
   "gpus": [
+   {"vendor": "intel", "name": "Intel(R) UHD Graphics 770", "id": "8086:a780", "driver_version": "32.0.101.7088",
+    "vram_bytes": 134217728, "shared_memory_bytes": 51207208960},
    {"vendor": "nvidia", "name": "NVIDIA GeForce RTX 3070", "id": "10de:2484", "driver_version": "610.88",
-    "vram_bytes": 8589934592, "shared_memory_bytes": 34193014784}
+    "vram_bytes": 8589934592, "shared_memory_bytes": 51207208960}
   ]
  },
  "summary": [
   {"group": "ep", "name": "DirectML", "device": "10de:2484", "result": "pass"},
   {"group": "ep", "name": "CPU", "device": null, "result": "record-only"},
   {"group": "benchmark", "name": "DirectML", "device": "10de:2484", "stage": "pipeline-1",
-   "ms_per_frame": 3.44, "fps": 290.7},
+   "ms_per_frame": 3.14, "fps": 318.5},
   {"group": "benchmark", "name": "CPU", "device": null, "stage": "pipeline-1",
-   "ms_per_frame": 16.08, "fps": 62.2}
+   "ms_per_frame": 15.35, "fps": 65.1}
  ],
  "checks": [
   {"name": "cpu:video", "result": "pass", "reason": null, "module": "CPU",
-   "numbers": {"cpu_ms": 16.1, "seconds": 5.0}},
+   "numbers": {"cpu_ms": 15.2, "seconds": 4.8}},
   {"name": "directml@10de-2484-0:probe", "result": "pass", "reason": null, "module": "DirectML",
-   "numbers": {"seconds": 1.2, "max_abs_diff": 9.537e-07}},
+   "numbers": {"seconds": 1.0, "max_abs_diff": 9.537e-07}},
   {"name": "directml@10de-2484-0:live", "result": "pass", "reason": null, "module": "DirectML",
-   "numbers": {"ep_ms": 3.3}},
+   "numbers": {"ep_ms": 3.0, "seconds": 2.8}},
   {"name": "directml@10de-2484-0:pipeline-1", "result": "record-only", "reason": null, "module": "DirectML",
-   "numbers": {"cameras": 1, "start_seconds": 1.44, "first_call_ms": 24.8, "median_ms": 3.44,
-               "p95_ms": 3.65, "vram_before_mib": 0, "peak_vram_mib": 279, "against_cpu": 0.21}},
+   "numbers": {"start_seconds": 1.42, "first_call_ms": 20.4, "median_ms": 3.14, "p95_ms": 3.43,
+               "peak_vram_mib": 279, "seconds": 3.4, "against_cpu": 0.2}},
   {"name": "directml@10de-2484-0", "result": "pass", "reason": null, "module": "DirectML"},
   {"name": "cpu:pipeline-1", "result": "record-only", "reason": null, "module": "CPU",
-   "numbers": {"cameras": 1, "start_seconds": 1.25, "first_call_ms": 122.0, "median_ms": 16.08,
-               "p95_ms": 17.85, "vram_before_mib": 0, "peak_vram_mib": 0}}
+   "numbers": {"start_seconds": 1.23, "first_call_ms": 108.1, "median_ms": 15.35, "p95_ms": 16.62,
+               "peak_vram_mib": null, "seconds": 4.6}}
  ],
  "cleanup": [],
  "test_media": [
@@ -662,17 +682,22 @@ reviewed. A pair that has a reviewed pass does not run. It gets an `ep` item `sk
  ],
  "details": {
   "pipeline": "yolox-rtmw-wholebody@skellytracker",
+  "thresholds": {"box_iou_min": 0.9, "keypoint_box_fraction_max": 0.01, "score_min": 0.4},
+  "frames": 30,
   "eps": {
    "directml@10de-2484-0": {"gpu": "10de:2484", "device": "gpu:10de:2484:0", "pack_version": "builtin",
-                            "models": [{"key": "yolox-person@openmmlab-exporter", "version": "0.1.0",
-                                        "size": "m", "precision": "fp16", "execution_provider": "directml",
-                                        "device": "gpu:10de:2484:0"}],
+                            "models": {"yolox-person@openmmlab-exporter": {"precision": "fp16"},
+                                       "rtmw-wholebody133@openmmlab-exporter": {"precision": "fp16"}},
                             "warnings": ["batch_limited_by_state"]}
   },
   "full": {"camera_counts": [1, 3, 6], "warmup_calls": 10, "timed_calls": 100, "running_mode": "video"},
-  "versions": {"python": "3.12.10", "ort_distribution": "onnxruntime-windowsml", "ort_version": "1.30.0.202609102321",
-               "windowsml": "2.6.74rc0", "catalog_revision": "<64 hex digits>",
-               "set_hash": "4abfaa7678817ed4a8ccb5f3e355ba28672589e8a3468bb6805e491dfe03a302"},
+  "versions": {"python": "3.13", "ort_distribution": "onnxruntime-windowsml", "ort_version": "1.30.0.202609102321",
+               "windowsml": "2.6.74rc0",
+               "catalog_revision": "b12c113934c499d493878003c1ab4a8c9c15865b3a0c4478dbfdd783c5edc768",
+               "set_hash": "4abfaa7678817ed4a8ccb5f3e355ba28672589e8a3468bb6805e491dfe03a302",
+               "numpy": "2.5.5", "opencv": "5.1.0"},
+  "models": [{"key": "yolox-person@openmmlab-exporter", "version": "0.1.0", "size": "m"},
+             {"key": "rtmw-wholebody133@openmmlab-exporter", "version": "0.4.0", "size": "m"}],
   "skipped": {},
   "scrub": {"exempted_terms": 0}
  },
@@ -680,7 +705,8 @@ reviewed. A pair that has a reviewed pass does not run. It gets an `ep` item `sk
 }
 ```
 
-The example shows 6 of the many checks of a real full report. It shows one of two `models` items.
+The example shows 6 of the 152 checks and 4 of the 22 summary items of the real report. It shows
+one of the four items of `details.eps`, and it has no `details.jpeg`.
 It puts a long check on two or three lines, so that a person can read it. A report file has each
 check on one line ([4.2](#42-layout), "The lines of the data block").
 A full run writes a report file. skellytracker uses the `id` also as the file name and as the

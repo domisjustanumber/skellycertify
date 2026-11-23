@@ -164,9 +164,9 @@ task. Delete an item when its work is done. The PR that closes an item records t
   with `interrupted` ([2.5](../report-format.md#25-runtime-rules)).
 - **The passive record: wait for the owner (ADR-M8E0).** The design waits for the answers of the owner to round 2 (Q15 to Q24). Nothing of it is in [`report-format.md`](../report-format.md) yet. Read [ADR-M8E0](entries/M8E0-passive-record-design.md).
 - **The relay: measure the size limit against a real report.** The relay refuses a file larger than
-  262,144 bytes (`MAX_BYTES` in `relay/src/handler.js`). A full report of skellytracker has about
-  87,000 bytes. The specification of skellycam gives a limit of 128 KiB for a full report with four
-  cameras. This limit is an estimate, not a measurement. An app report with six cameras can then be
+  262,144 bytes (`MAX_BYTES` in `relay/src/handler.js`). The first full report of skellytracker in
+  format 1.10.0 (2026-11-23, five labels on two GPUs, 152 checks) has 38,518 bytes as a file. The
+  specification of skellycam gives a limit of 128 KiB for a full report with four cameras. This limit is an estimate, not a measurement. An app report with six cameras can then be
   larger than the limit of the relay. The owner decided on 2026-11-23 to keep the limit until a real
   report is measured. When the first full report of skellycam exists, put it and a full report of
   skellytracker in one file. Measure the size of the file and the time of the checks of the relay.
