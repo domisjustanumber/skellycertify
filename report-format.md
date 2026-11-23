@@ -1515,7 +1515,7 @@ Changes of the format:
   of the relay: the two aims of both levels ([2.7](#27-the-two-levels)), the exact count of `total`
   ([2.6](#26-the-plan-function)) and the new [5.8](#58-what-a-check-writes), which tells what a
   check writes
-  ([ADR-ZW66](decisions/entries/ZW66-what-a-check-writes-and-the-aims-of-both-levels.md)) A `camera`
+  ([ADR-ZW66](decisions/entries/ZW66-what-a-check-writes-and-the-aims-of-both-levels.md)). A `camera`
   item of a camera with no USB id has `device` `null` ([3.7](#37-summary))
   ([ADR-D249](decisions/entries/D249-device-null-for-a-camera-with-no-usb-id.md)).
 - 1.9.0: An `ep`, `gpu-jpeg`, `camera` or `component` summary item can have `skipped` with the new
