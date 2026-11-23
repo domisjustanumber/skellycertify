@@ -1,6 +1,7 @@
 # 6C0M — The sources of a camera name, in order
 
-**Status:** absorbed into [`report-format.md` 3.7](../../report-format.md#37-summary),
+**Status:** superseded by [PS04](PS04-personal-device-class-text-before-product-string.md),
+2026-11-23 (direct commit to `main`). Absorbed into [`report-format.md` 3.7](../../report-format.md#37-summary),
 [6](../../report-format.md#6-privacy-rules),
 [8](../../report-format.md#8-versioning-of-the-format), 2026-11-23 (direct commit to `main`).
 Accepted 2026-11-23 (owner).

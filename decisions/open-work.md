@@ -83,12 +83,14 @@ task. Delete an item when its work is done. The PR that closes an item records t
 - **skellycam: write the `camera` items
   ([ADR-F1KN](entries/F1KN-format-1-2-0-markdown-layout-revised.md),
   [ADR-D1PW](entries/D1PW-format-1-3-0.md),
-  [ADR-6C0M](entries/6C0M-sources-of-a-camera-name.md)).** When skellycam has checks of this
+  [ADR-PS04](entries/PS04-personal-device-class-text-before-product-string.md)).** When skellycam has checks of this
   format, fill `summary` with one `camera` item for each camera model, not for each unit
   ([3.7](../report-format.md#37-summary)). Take the name from the first source of rule 16 of
   [section 6](../report-format.md#6-privacy-rules) that applies: the list of known cameras of
-  skellycam (keyed by USB vendor id and product id), the USB product string through the filter of
-  the rule, a fixed class text for a personal device, `Camera (no USB id)`, or `Camera vvvv:pppp`.
+  skellycam (keyed by USB vendor id and product id), a fixed class text for a personal device (also
+  a camera whose product text holds a personal-device word), the USB product string through the
+  filter of the rule, `Camera (no USB id)`, or `Camera vvvv:pppp`. Keep the list of
+  personal-device words and their class texts in the documentation of skellycam.
   Never use a display name that the OS or a person can set. Use
   `partial` and `skipped` with `busy` for a camera. Refuse the run with `cameras-busy` when skellycam
   cannot get the cameras ([2.5](../report-format.md#25-runtime-rules)). Give each camera item a

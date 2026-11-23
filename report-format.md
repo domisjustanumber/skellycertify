@@ -1127,12 +1127,19 @@ These rules apply to the writer. A test of the writer can check them. A reviewer
     details or other personal details.
 16. A camera name holds no name of a person. The package that writes the name sets it before the
     report exists. It uses the first of these sources that applies
-    ([ADR-6C0M](decisions/entries/6C0M-sources-of-a-camera-name.md)):
+    ([ADR-PS04](decisions/entries/PS04-personal-device-class-text-before-product-string.md)):
     1. The name in the list of known cameras of the package. The key of the list is the USB vendor
        id and the product id of the camera.
-    2. For a camera that is not in the list: the product text in the firmware of the camera (the
-       USB product string). The package never uses a display name that the OS or a person can set.
-       The package changes the product text with this filter:
+    2. For a personal device that a person uses as a camera: a fixed text for the class of the
+       device: `iPhone used as camera`, `iPad used as camera` or `Mac built-in camera`. A camera
+       is also a personal device when its product text (source 3) holds a personal-device word,
+       for example `iPhone`, `iPad`, `Mac` or `MacBook`. Compare the words without case. Such a
+       product text is often `<person>'s iPhone`, and a package cannot know each name. So the
+       class text applies before the product text. The package keeps the list of personal-device
+       words and their class texts in its own documentation.
+    3. For a camera that is not in the list and is not a personal device: the product text in the
+       firmware of the camera (the USB product string). The package never uses a display name that
+       the OS or a person can set. The package changes the product text with this filter:
        - It applies the Unicode normalization NFKC.
        - It keeps only letters, marks and digits of each script (the Unicode categories L, M and
          N), the space (U+0020) and the characters of rule 18. It replaces each other character
@@ -1140,8 +1147,6 @@ These rules apply to the writer. A test of the writer can check them. A reviewer
        - It replaces each run of spaces with one space, and it removes the spaces at the start and
          at the end.
        - It keeps at most 60 characters.
-    3. For a personal device that a person uses as a camera: a fixed text for the class of the
-       device, for example `iPhone used as camera`, `iPad used as camera` or `Mac built-in camera`.
     4. For a camera with no USB id: `Camera (no USB id)`.
     5. When a rule of this section refuses the name of sources 1 to 4: `Camera vvvv:pppp`, with the
        USB vendor id and the product id in lower-case hex, for example `Camera 046d:085c`. A product
@@ -1293,10 +1298,11 @@ Changes of the format:
     not one unit, with no exception
     ([ADR-6GAN](decisions/entries/6GAN-no-unit-id-of-a-camera.md)).
   - Rule 16 of [section 6](#6-privacy-rules) gives the sources of a camera name, in order: the list
-    of known cameras of the package, the USB product string through a filter, a fixed class text
-    for a personal device, `Camera (no USB id)` and `Camera vvvv:pppp`. The name never comes from a
-    display name that the OS or a person can set
-    ([ADR-6C0M](decisions/entries/6C0M-sources-of-a-camera-name.md)).
+    of known cameras of the package, a fixed class text for a personal device (also a camera whose
+    product text holds a personal-device word), the USB product string through a filter,
+    `Camera (no USB id)` and `Camera vvvv:pppp`. The name never comes from a display name that the
+    OS or a person can set
+    ([ADR-PS04](decisions/entries/PS04-personal-device-class-text-before-product-string.md)).
   - The new [5.5](#55-how-a-package-adds-a-check) tells how a package adds a check, and which
     changes need a change of this document. The owner of this repository approves each change of
     the format ([ADR-98KC](decisions/entries/98KC-how-a-package-adds-a-check.md)).
