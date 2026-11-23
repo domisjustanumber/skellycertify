@@ -110,7 +110,7 @@ function systemLines(data) {
 }
 
 const RESULT = { __proto__: null, pass: 'pass', fail: 'fail', 'record-only': 'record', partial: 'partial' };
-const SKIPPED = { __proto__: null, busy: 'skipped (busy)', reviewed: 'skipped (already reviewed)', 'not-installed': 'skipped (not installed)' };
+const SKIPPED = { __proto__: null, busy: 'skipped (busy)', reviewed: 'skipped (already reviewed)', 'not-installed': 'skipped (not installed)', declined: 'skipped (declined)' };
 const shown = (it) => (it.result === 'skipped' ? SKIPPED[it.reason] : RESULT[it.result]) ?? code(it.result, 20);
 
 const itemsOf = (m) => (Array.isArray(m.summary) ? m.summary : []);

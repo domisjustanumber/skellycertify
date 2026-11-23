@@ -56,9 +56,10 @@ task. Delete an item when its work is done. The PR that closes an item records t
   skellycam and freemocap must accept the keyword-only option `abandon` of `certify()`
   ([2.4](../report-format.md#24-cancel)). They must write `test_media` for each test media file
   that the checks used ([3.9](../report-format.md#39-test_media)). They must write the schema id
-  `skellycertify.report/1.8.0`, not `skellycertify.report/1.5.0`, when they write the rules of
-  format 1.6.0, 1.7.0 and 1.8.0 ([ADR-Q02Y](entries/Q02Y-test-media-name-exempt-from-rule-7.md),
-  [ADR-974S](entries/974S-format-1-8-0-second-opt-in-for-a-setup.md)).
+  `skellycertify.report/1.9.0`, not `skellycertify.report/1.5.0`, when they write the rules of
+  format 1.6.0, 1.7.0, 1.8.0 and 1.9.0 ([ADR-Q02Y](entries/Q02Y-test-media-name-exempt-from-rule-7.md),
+  [ADR-974S](entries/974S-format-1-8-0-second-opt-in-for-a-setup.md),
+  [ADR-T3BD](entries/T3BD-format-1-9-0-skipped-reason-declined.md)).
 - **Each package: write format 1.8.0 ([ADR-974S](entries/974S-format-1-8-0-second-opt-in-for-a-setup.md)).**
   skellytracker, skellycam and freemocap must accept the keyword-only option `setups` of
   `certify()` and `certify_plan()`. Their `certify_plan()` must return the list `setups`, with an
@@ -66,12 +67,22 @@ task. Delete an item when its work is done. The PR that closes an item records t
   setup check whose setup is not in `setups` must be `not-run` with `not-selected`. A declined setup
   must not add `partial-run` ([7.1](../report-format.md#71-validity)). They must name in their
   documentation the setup that each setup check needs. They must write the schema id
-  `skellycertify.report/1.8.0`.
+  `skellycertify.report/1.9.0` ([ADR-T3BD](entries/T3BD-format-1-9-0-skipped-reason-declined.md)).
+- **Each package: write format 1.9.0 ([ADR-T3BD](entries/T3BD-format-1-9-0-skipped-reason-declined.md)).**
+  skellytracker, skellycam and freemocap must give an `ep`, `gpu-jpeg`, `camera` or `component`
+  item the result `skipped` with the reason `declined` when no check of the item ran because the
+  person declined each setup that its checks need ([3.7](../report-format.md#37-summary),
+  [2.6](../report-format.md#26-the-plan-function), "Setups"). They must write the schema id
+  `skellycertify.report/1.9.0`.
 - **freemocap: the second question for a setup
   ([ADR-974S](entries/974S-format-1-8-0-second-opt-in-for-a-setup.md)).** Show each item of
   `setups` of each plan as its own yes/no question before the run, apart from the consent to the
   full run ([2.6](../report-format.md#26-the-plan-function), "Setups"). Give the `id` of each
   accepted setup to `certify()` of that package in the option `setups`.
+- **freemocap: print `skipped (declined)`
+  ([ADR-T3BD](entries/T3BD-format-1-9-0-skipped-reason-declined.md)).** In the Markdown writer,
+  print a summary item with the result `skipped` and the reason `declined` as `skipped (declined)`
+  ([4.2](../report-format.md#42-layout)).
 - **Each package: check the existing checks against 5.6
   ([ADR-TWK1](entries/TWK1-when-a-check-can-exist-and-the-aims-of-the-levels.md)).**
   skellytracker, skellycam and freemocap must check each existing check against

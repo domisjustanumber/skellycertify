@@ -1,6 +1,6 @@
 # Report format
 
-**Status:** draft. Format version 1.8.0.
+**Status:** draft. Format version 1.9.0.
 
 This document is the contract between the freemocap packages, the freemocap app and this
 repository. Each package implements it in its own code. There is no shared code package.
@@ -298,6 +298,10 @@ second opt-in of the person
   a summary item whose `gate` is that roll-up check gives no reviewed row
   ([7.2](#72-kinds-of-evidence)). When the other checks of the item passed, the item is `partial`
   ([3.7](#37-summary)).
+- When no check of an item ran because the person declined each setup that the checks of the item
+  need, the item is `skipped` with the reason `declined` ([3.7](#37-summary)). It gives no reviewed
+  row ([7.2](#72-kinds-of-evidence))
+  ([ADR-T3BD](decisions/entries/T3BD-format-1-9-0-skipped-reason-declined.md)).
 
 ### 2.7 The two levels
 
@@ -379,7 +383,7 @@ outside the data of each package.
 
 | Field | Type | Required | Meaning |
 |---|---|---|---|
-| `schema` | string | yes | `skellycertify.report/1.8.0` ([section 8](#8-versioning-of-the-format)). |
+| `schema` | string | yes | `skellycertify.report/1.9.0` ([section 8](#8-versioning-of-the-format)). |
 | `id` | string | no | A version 4 UUID in the lower-case form with hyphens (36 characters), for example `3f2b8c1e-9a4d-4e7b-b6a1-0c5d2e8f7a90`. The package gives it when it saves the report. It is unique in a report file. It holds no time and no data of the system. A version 1 UUID is forbidden, because it holds the MAC address. A report that was not saved can have no `id`. |
 | `package` | object | yes | See [3.2](#32-package). |
 | `kind` | string | yes | `quick`, `full` or `passive` ([7.2](#72-kinds-of-evidence)). `passive` is reserved for a record that the package gathers from normal use ([7.3](#73-the-passive-record-reserved)). Its fields are not yet defined. A writer must not write `passive` in this version. |
@@ -586,7 +590,7 @@ reviewed. A pair that has a reviewed pass does not run. It gets an `ep` item `sk
 
 ```json
 {
- "schema": "skellycertify.report/1.8.0",
+ "schema": "skellycertify.report/1.9.0",
  "id": "3f2b8c1e-9a4d-4e7b-b6a1-0c5d2e8f7a90",
  "package": {"name": "skellytracker", "version": "2024.9.1019",
              "commit": "0123456789abcdef0123456789abcdef01234567", "tree_modified": false},
@@ -691,7 +695,7 @@ person ([4.2](#42-layout)). It is not the `summary` of a section ([3.5](#35-sect
 | `name` | A short fixed name from the vocabulary of the package, for example `TensorRT RTX`, `CUDA`, `DirectML` or `CPU`. For a camera, the camera name of rule 16 of [section 6](#6-privacy-rules), for example `Logitech C922` ([ADR-6C0M](decisions/entries/6C0M-sources-of-a-camera-name.md)). For `benchmark`, the tested part, as for `ep`. For `component`, the name of the component, for example `MediaPipe`. |
 | `device` | For `ep`, `gpu-jpeg` and `benchmark`: the `id` of the GPU in `host.gpus`. For a PCI device this is `vvvv:dddd`. For `camera`: the USB id `vvvv:pppp`. For `component`: always `null`. Else `null`. |
 | `result` | Not for `benchmark`. `pass`, `fail`, `record-only`, `partial` or `skipped`. |
-| `reason` | Not for `benchmark`. For `skipped`: `busy` or `reviewed`, and for a `component` item also `not-installed`. For each other result: absent or `null`. |
+| `reason` | Not for `benchmark`. For `skipped`: `busy`, `reviewed` or `declined`, and for a `component` item also `not-installed`. For each other result: absent or `null`. |
 | `gate` | Optional. Only for `ep`, `gpu-jpeg`, `camera` and `component`. The `name` of one roll-up check ([3.4](#34-check)) of the same module report, for example `046d-085c:gate` for a camera. It matches the pattern of a check name. The relay refuses another form. The package names it. [7.2](#72-kinds-of-evidence) tells what it gives ([ADR-T191](decisions/entries/T191-gate-of-a-summary-item.md)). |
 | `stage` | Only for `benchmark`. A short fixed name of the package for the measured stage. At most 80 characters. |
 | `ms_per_frame`, `fps` | Only for `benchmark`. Two numbers, each 0 or more: the time in milliseconds to process one frame set, and the frame sets for each second. `fps` is 1000 / `ms_per_frame`. |
@@ -716,7 +720,11 @@ The results of an item:
   the camera or the GPU. The reason `reviewed` tells that the package skipped the item at the level
   `quick` because the item already has a reviewed pass. The reason `not-installed` tells that the
   component is not installed on the system, for example Blender. Only a `component` item can have
-  `not-installed`.
+  `not-installed`. The reason `declined` tells that the person declined each setup that the checks
+  of the item need, so no check of the item ran ([2.6](#26-the-plan-function), "Setups"). An `ep`,
+  `gpu-jpeg`, `camera` or `component` item can have `declined`. When a check of the item ran, the
+  item does not have `declined`
+  ([ADR-T3BD](decisions/entries/T3BD-format-1-9-0-skipped-reason-declined.md)).
 
 A `benchmark` item has no `result` and no `reason`. The details of the measurement stay in
 `checks`.
@@ -790,7 +798,7 @@ One report file holds one JSON object:
 
 | Field | Meaning |
 |---|---|
-| `schema` | `skellycertify.report/1.8.0`. |
+| `schema` | `skellycertify.report/1.9.0`. |
 | `app` | `name`, `version` (SemVer) and `commit` of the app, or `null` for a report of one package that ran alone. |
 | `modules` | A list of module reports. The list holds at least one module report. A package can give more than one module report, for example one for each run. Each module report is independent ([7.1](#71-validity)). |
 | `note` | The one free-text note of the person, or `null`. At most 2000 characters. It must be a clean note (rule 18 of [section 6](#6-privacy-rules)). |
@@ -912,11 +920,12 @@ line between two parts:
     run of backticks in the JSON.
 
 The Markdown shows a result as `pass`, `fail`, `record`, `partial`, `skipped (busy)`,
-`skipped (already reviewed)` or `skipped (not installed)`. Part 8 also shows `not run`, the display
-of `not-run`. `record` is the display of `record-only`. `skipped (busy)` is the
-display of `skipped` with the reason `busy`. `skipped (already reviewed)` is the display of
+`skipped (already reviewed)`, `skipped (not installed)` or `skipped (declined)`. Part 8 also shows
+`not run`, the display of `not-run`. `record` is the display of `record-only`. `skipped (busy)` is
+the display of `skipped` with the reason `busy`. `skipped (already reviewed)` is the display of
 `skipped` with the reason `reviewed`. `skipped (not installed)` is the display of `skipped` with
-the reason `not-installed`. A writer prints the summary items. It does not compute them.
+the reason `not-installed`. `skipped (declined)` is the display of `skipped` with the reason
+`declined`. A writer prints the summary items. It does not compute them.
 The relay shows the same summary in the issue. It builds it from the JSON block and not from the
 Markdown.
 
@@ -994,17 +1003,17 @@ Note of the person:
 
 ```json
 {
- "schema": "skellycertify.report/1.8.0",
+ "schema": "skellycertify.report/1.9.0",
  "app": {"name": "freemocap", "version": "2.0.0", "commit": "89abcdef0123456789abcdef0123456789abcdef"},
  "modules": [
-  {"schema": "skellycertify.report/1.8.0", "package": {"name": "skellytracker", "...": "..."},
+  {"schema": "skellycertify.report/1.9.0", "package": {"name": "skellytracker", "...": "..."},
    "summary": [
     {"group": "ep", "name": "CUDA", "device": "10de:2484", "result": "skipped", "reason": "reviewed"},
     {"group": "ep", "name": "DirectML", "device": "10de:2484", "result": "pass"},
     {"group": "ep", "name": "CPU", "device": null, "result": "record-only"},
     {"group": "component", "name": "MediaPipe", "device": null, "result": "skipped", "reason": "reviewed"}
    ]},
-  {"schema": "skellycertify.report/1.8.0", "package": {"name": "skellycam", "...": "..."},
+  {"schema": "skellycertify.report/1.9.0", "package": {"name": "skellycam", "...": "..."},
    "summary": [
     {"group": "camera", "name": "Logitech C922", "device": "046d:085c", "result": "partial"},
     {"group": "camera", "name": "Razer Kiyo Pro", "device": "1532:0e05", "result": "skipped", "reason": "busy"}
@@ -1381,6 +1390,15 @@ the capture backend and the OS. Camera evidence is not part of an EP row.
 
 Changes of the format:
 
+- 1.9.0: An `ep`, `gpu-jpeg`, `camera` or `component` summary item can have `skipped` with the new
+  reason `declined`, shown as `skipped (declined)`. It tells that the person declined each setup
+  that the checks of the item need, so no check of the item ran ([2.6](#26-the-plan-function),
+  "Setups", [3.7](#37-summary), [4.2](#42-layout)). When a check of the item ran, the item does not
+  have `declined`. This is a minor change: it adds an allowed value, as
+  `not-installed` did in 1.6.0. `declined` does not change the meaning of `busy`, `reviewed` or
+  `not-installed`. A reader of 1.8.0 refuses such a report, so the schema id must tell the two
+  apart. A reader of major version 1 still accepts a file of 1.8.0 or earlier
+  ([ADR-T3BD](decisions/entries/T3BD-format-1-9-0-skipped-reason-declined.md)).
 - 1.8.0: The plan can have the optional list `setups`. Each item has `id` and `text`. The plan of a
   quick run has an empty list. `certify()` and `certify_plan()` of each package accept the
   keyword-only option `setups`: the `id` of each setup that the person accepted. The app asks one
@@ -1493,7 +1511,7 @@ These are the only packages of this format.
 
 | Package | Evidence for | `certify()` | Reason codes | Evidence rows |
 |---|---|---|---|---|
-| skellytracker | execution providers (EPs) | `skellytracker.certify` and `skellytracker.certify_plan`, levels `quick` and `full`. Package options: `execution_providers`, `pipeline`. The tool `tools/certify_platform.py` writes a report file of this format (schema 1.8.0; see [3.6](#36-example-skellytracker)). | `skellytracker/REASON_CODES.md` | `skellytracker/core/eps/ep_evidence.yaml` (EPs); this repository for the other sections |
+| skellytracker | execution providers (EPs) | `skellytracker.certify` and `skellytracker.certify_plan`, levels `quick` and `full`. Package options: `execution_providers`, `pipeline`. The tool `tools/certify_platform.py` writes a report file of this format (schema 1.9.0; see [3.6](#36-example-skellytracker)). | `skellytracker/REASON_CODES.md` | `skellytracker/core/eps/ep_evidence.yaml` (EPs); this repository for the other sections |
 | freemocap | the app on an OS: it starts a child process, loads its bundled modules and can write its data folder | `freemocap.certify` and `freemocap.certify_plan`, level `quick`. The level `full` is not built. Package options: `ui_remote`, `blender_exe_path`. | the docstring of `freemocap/certification.py` | none yet |
 | skellycam | cameras ([7.4](#74-camera-evidence)) | not yet implemented | not yet implemented | not yet implemented |
 

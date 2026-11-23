@@ -56,8 +56,9 @@ of 4.2.
   with no `summary` (format 1.1.0 or earlier) gives no item rows. Each GPU that no `ep` item names
   has the result `not checked`. When no module has `summary`, that result is
   `no summary in the report`, because the EPs of such a file can have run. A result is `pass`,
-  `fail`, `record`, `partial`, `skipped (busy)`, `skipped (already reviewed)` or
-  `skipped (not installed)`. Only a `component` item can have `skipped (not installed)`.
+  `fail`, `record`, `partial`, `skipped (busy)`, `skipped (already reviewed)`,
+  `skipped (not installed)` or `skipped (declined)`. Only a `component` item can have
+  `skipped (not installed)`. Each item with a result can have `skipped (declined)`.
 - Only when a module has a `benchmark` item: the table `| GPU | Module | Stage | ms/frame | FPS |`.
 - Only when a module has a `component` item: the table `| Module | Result |` of 4.2 part 6, with
   one row for each `component` item. A `component` item must have `device` `null`.

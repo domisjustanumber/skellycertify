@@ -255,6 +255,30 @@ test('not-installed 1.6.0: a reason of skipped only for a component item', () =>
   }
 });
 
+test('declined 1.9.0: a reason of skipped for each group with a result', () => {
+  for (const it of [
+    { group: 'ep', name: 'CUDA', device: '10de:2484', result: 'skipped', reason: 'declined' },
+    { group: 'gpu-jpeg', name: 'CUDA', device: '10de:2484', result: 'skipped', reason: 'declined' },
+    { group: 'camera', name: 'Logitech C922', device: '046d:085c', result: 'skipped', reason: 'declined' },
+    { group: 'component', name: 'Blender', device: null, result: 'skipped', reason: 'declined' },
+  ]) {
+    const d = validData();
+    d.modules[0].summary.push(it);
+    assert.ok(parse(reportFile(d)), JSON.stringify(it));
+  }
+  const W = 'report.modules[0].summary[0]';
+  for (const change of [
+    (m) => { m.summary[0].result = 'skipped'; m.summary[0].reason = 'setup-declined'; }, // a made-up reason
+    (m) => { m.summary[0].result = 'skipped'; m.summary[0].reason = 'Declined'; },
+    (m) => { m.summary[0] = { group: 'camera', name: 'Logitech C922', device: '046d:085c', result: 'partial', reason: 'declined' }; },
+    (m) => { m.summary[0] = { group: 'component', name: 'Blender', device: null, result: 'pass', reason: 'declined' }; },
+  ]) {
+    const e = validData();
+    change(e.modules[0]);
+    refused(reportFile(e), 'bad-value', `${W}.reason`);
+  }
+});
+
 test('test_media 1.6.0: optional; at most 50 items of name, sha256, bytes and source (section 3.9)', () => {
   const item = { name: 'quick_frames.zip', sha256: 'a973456f417eab8e24ea8aa3f118a48142aa55143af69c73ee6799cb4f94c1f4', bytes: 6215661, source: 'bundled' };
   const ok = [

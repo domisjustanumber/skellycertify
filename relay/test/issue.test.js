@@ -305,6 +305,28 @@ test('1.6.0: skipped (not installed) for a component; test_media and shared_memo
   assert.equal(body.replace('| Module | Result |\n|---|---|\n| `Blender` | skipped (not installed) |\n\n', ''), buildBody(args(validData())));
 });
 
+test('1.9.0: skipped (declined) for an ep, gpu-jpeg, camera and component item; its not-run checks have no row', () => {
+  const d = validData();
+  d.modules[0].summary = [
+    { group: 'ep', name: 'CUDA', device: '10de:2484', result: 'skipped', reason: 'declined' },
+    { group: 'gpu-jpeg', name: 'CUDA', device: '10de:2484', result: 'skipped', reason: 'declined' },
+    { group: 'camera', name: 'Logitech C922', device: '046d:085c', result: 'skipped', reason: 'declined' },
+    { group: 'component', name: 'Blender', device: null, result: 'skipped', reason: 'declined' },
+  ];
+  d.modules[0].checks.push(
+    { name: 'cuda@10de-2484-0:lamp', module: 'CUDA', result: 'not-run', reason: 'not-selected' },
+    { name: 'low-light', module: 'Logitech C922', result: 'not-run', reason: 'not-selected' },
+  );
+  const body = buildBody(args(d));
+  assert.ok(body.includes([
+    '| `NVIDIA RTX 3070 8 GB` | `CUDA` | skipped (declined) |',
+    '| `NVIDIA RTX 3070 8 GB` | `CUDA` GPU decode | skipped (declined) |',
+  ].join('\n')));
+  assert.ok(body.includes('| `Blender` | skipped (declined) |'));
+  assert.ok(body.includes('| `Logitech C922` | skipped (declined) |'));
+  assert.doesNotMatch(body, /not-selected|cuda@10de-2484-0:lamp|low-light/, 'a skipped item: its not-run checks have no row (4.2 part 8)');
+});
+
 test('the header time of a file with two or more modules is the oldest created_utc (4.2)', () => {
   const d = validData();
   d.modules.push({ ...validData().modules[0], created_utc: '2026-11-18T23:05:00Z' }, { ...validData().modules[0], created_utc: '2026-11-20T08:00:00Z' });
