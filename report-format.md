@@ -1104,6 +1104,7 @@ check names.
   level.
 - The package defines the name of the check in its own specification or documentation. It does
   this in the same commit that adds the check.
+- The package adds the name to its list of check names ([5.7](#57-the-list-of-check-names-of-a-package)).
 - The name matches the pattern of a check name ([3.4](#34-check)). The pair (`section`, `name`) is
   unique in the module report.
 - The check is one test ([3.4](#34-check), "One test, one check").
@@ -1188,6 +1189,24 @@ true:
 5. An experimental method is a method whose answer is not yet verified on that system. Its check
    runs only at the level `full`. The package puts it where its failure cannot spoil the rest of
    the run. The check reports its own result.
+
+### 5.7 The list of check names of a package
+
+Each package keeps one list of all its check names
+([ADR-9K1Q](decisions/entries/9K1Q-one-list-of-check-names-for-each-package.md)).
+
+- The list is in the own repository of the package. The package owns the names. This repository
+  holds no list.
+- A name with a variable part is in the list in its template form, for example
+  `<label>:usb3-trial`.
+- Each entry gives the name and the level: `quick`, `full` or both. Only these two are required. A
+  package can add more to an entry.
+- The list is machine-readable: a tool can read each entry exactly. The list is in one place. The
+  format sets no form for the list. [Section 9](#9-packages) names the place of the list of each
+  package.
+- A new check goes into the list before its code, or in the same commit.
+- The package must have two tests. First, each check name that a run writes matches an entry of the
+  list. Second, each entry is known to the code of the package, or the list marks it as not built.
 
 ## 6. Privacy rules
 
@@ -1399,6 +1418,10 @@ Changes of the format:
   `not-installed`. A reader of 1.8.0 refuses such a report, so the schema id must tell the two
   apart. A reader of major version 1 still accepts a file of 1.8.0 or earlier
   ([ADR-T3BD](decisions/entries/T3BD-format-1-9-0-skipped-reason-declined.md)).
+  This change of the text is also in 1.9.0. It changes no field, no allowed value and no check of
+  the relay: the new [5.7](#57-the-list-of-check-names-of-a-package) tells each package to keep one
+  list of its check names, and to test it
+  ([ADR-9K1Q](decisions/entries/9K1Q-one-list-of-check-names-for-each-package.md)).
 - 1.8.0: The plan can have the optional list `setups`. Each item has `id` and `text`. The plan of a
   quick run has an empty list. `certify()` and `certify_plan()` of each package accept the
   keyword-only option `setups`: the `id` of each setup that the person accepted. The app asks one
@@ -1514,6 +1537,10 @@ These are the only packages of this format.
 | skellytracker | execution providers (EPs) | `skellytracker.certify` and `skellytracker.certify_plan`, levels `quick` and `full`. Package options: `execution_providers`, `pipeline`. The tool `tools/certify_platform.py` writes a report file of this format (schema 1.9.0; see [3.6](#36-example-skellytracker)). | `skellytracker/REASON_CODES.md` | `skellytracker/core/eps/ep_evidence.yaml` (EPs); this repository for the other sections |
 | freemocap | the app on an OS: it starts a child process, loads its bundled modules and can write its data folder | `freemocap.certify` and `freemocap.certify_plan`, level `quick`. The level `full` is not built. Package options: `ui_remote`, `blender_exe_path`. | the docstring of `freemocap/certification.py` | none yet |
 | skellycam | cameras ([7.4](#74-camera-evidence)) | not yet implemented | not yet implemented | not yet implemented |
+
+The place of the list of check names of each package ([5.7](#57-the-list-of-check-names-of-a-package)):
+skellycam has it in `specs/certify.md` (the list is being built there). The place for skellytracker
+and for freemocap is not yet defined.
 
 The public repository of skellytracker is `https://github.com/domisjustanumber/skellytracker` for
 now. The public repository of freemocap is `https://github.com/domisjustanumber/freemocap` for

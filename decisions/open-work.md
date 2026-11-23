@@ -82,6 +82,12 @@ task. Delete an item when its work is done. The PR that closes an item records t
   ([2.7](../report-format.md#27-the-two-levels), "Order of the checks"). Name in the specification
   of the package the question of each `record-only` check, and what turns it into a judged check or
   removes it.
+- **Each package: make the one list of check names
+  ([ADR-9K1Q](entries/9K1Q-one-list-of-check-names-for-each-package.md)).** skellytracker,
+  skellycam and freemocap must make their one list of check names and the two tests of
+  [5.7](../report-format.md#57-the-list-of-check-names-of-a-package). Then this repository must name
+  the place of the list of skellytracker and of freemocap in
+  [section 9](../report-format.md#9-packages).
 - **freemocap: the app side of format 1.6.0 ([ADR-9FHP](entries/9FHP-format-1-6-0.md)).** Set
   `abandon` for a package process that has no caller after the backend ended early
   ([2.4](../report-format.md#24-cancel)). Give the `component` item of Blender the result `skipped`
