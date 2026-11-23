@@ -1,6 +1,6 @@
 # Report format
 
-**Status:** draft. Format version 1.9.0.
+**Status:** draft. Format version 1.10.0.
 
 This document is the contract between the freemocap packages, the freemocap app and this
 repository. Each package implements it in its own code. There is no shared code package.
@@ -252,7 +252,12 @@ It loads no GPU library and downloads nothing. It returns:
 `system_changes` holds one fixed sentence for each change outside the work folder, for example the
 install of a Windows ML package. `questions` holds the yes/no questions of the package, each with
 `section`, `id` and `text`. `seconds_estimate` is the time estimate of the run in whole seconds.
-`total` is the count of checks that the run will do, a whole number, 0 or more. `risks` holds one
+`total` is the count of checks that the run will do, a whole number, 0 or more. It is the count of
+the rows that the run plans to write in `checks` ([3.1](#31-fields)). A roll-up check
+([3.4](#34-check)) is a row, so it counts. `total` does not count a row that the run writes only
+after an event, for example an `exit` row ([2.5](#25-runtime-rules), "Crashes"), or a setup check
+that the person did not accept ("Setups" below)
+([ADR-ZW66](decisions/entries/ZW66-what-a-check-writes-and-the-aims-of-both-levels.md)). `risks` holds one
 fixed sentence for each thing that the run can do to a device, for example "The last part of the
 full run sends direct USB requests and can make a camera stop until it is replugged." The plan of a
 quick run must have an empty `risks` list. Each item of `downloads` has `name` (the file name), `bytes` (the size in bytes), `source` (the
@@ -313,8 +318,15 @@ second opt-in of the person
   errors. Its result either signs off the use of this path in production, or it gives a developer
   the information to fix the issues in a later release.
 
+Both levels also have these two aims
+([ADR-ZW66](decisions/entries/ZW66-what-a-check-writes-and-the-aims-of-both-levels.md)):
+
+- The report leaks no data of the user ([section 6](#6-privacy-rules)).
+- The report is short. It has no row that carries no information
+  ([5.8](#58-what-a-check-writes)).
+
 [5.6](#56-when-a-check-can-exist-and-its-level) tells which checks can exist and the level of each
-check.
+check. [5.8](#58-what-a-check-writes) tells what a check writes.
 
 **Level `quick`.** A package must obey these three rules:
 
@@ -383,11 +395,12 @@ outside the data of each package.
 
 | Field | Type | Required | Meaning |
 |---|---|---|---|
-| `schema` | string | yes | `skellycertify.report/1.9.0` ([section 8](#8-versioning-of-the-format)). |
+| `schema` | string | yes | `skellycertify.report/1.10.0` ([section 8](#8-versioning-of-the-format)). |
 | `id` | string | no | A version 4 UUID in the lower-case form with hyphens (36 characters), for example `3f2b8c1e-9a4d-4e7b-b6a1-0c5d2e8f7a90`. The package gives it when it saves the report. It is unique in a report file. It holds no time and no data of the system. A version 1 UUID is forbidden, because it holds the MAC address. A report that was not saved can have no `id`. |
 | `package` | object | yes | See [3.2](#32-package). |
 | `kind` | string | yes | `quick`, `full` or `passive` ([7.2](#72-kinds-of-evidence)). `passive` is reserved for a record that the package gathers from normal use ([7.3](#73-the-passive-record-reserved)). Its fields are not yet defined. A writer must not write `passive` in this version. |
 | `created_utc` | string | yes | The start of the run, `YYYY-MM-DDTHH:MM:SSZ`. The relay accepts only the current UTC year, the year before and the year after. |
+| `seconds` | number | no | The length of the whole run of the package in seconds, a number of 0 or more, for example `271.4`. A writer that does not know the length writes no `seconds`. The relay refuses another form, also `null` ([ADR-2EXP](decisions/entries/2EXP-format-1-10-0.md)). |
 | `host` | object | yes | Hardware and software facts. See [3.3](#33-host). |
 | `checks` | list | yes | Each check of the run. See [3.4](#34-check). |
 | `sections` | list | no | The sections of the run. See [3.5](#35-section). |
@@ -425,6 +438,12 @@ writes `null`. This does not apply to `name` and `id` of a GPU.
 | `cpu.name` | The model name of the CPU. |
 | `memory_bytes` | The total memory in bytes. |
 | `gpus` | A list. Each item has `vendor`, `name`, `id` (the PCI vendor id and device id in lower-case hex, for example `10de:2484`), `driver_version`, `vram_bytes` (the dedicated memory of the GPU in bytes) and `shared_memory_bytes` (the shared system memory that the GPU can use, in bytes, for example `SharedSystemMemory` of DXGI on Windows; `null` when the OS gives no value). |
+
+**Memory in whole MiB.** A writer writes `memory_bytes`, `vram_bytes` and `shared_memory_bytes` in
+bytes, rounded down to a whole MiB: a multiple of 1,048,576. For example, 68388003840 bytes
+become 68387078144 bytes (65219 MiB). The exact count of bytes identifies one configuration more than a model. A
+reader accepts a value that is not a multiple of 1,048,576, for example in an older report. The
+relay does not refuse it ([ADR-2EXP](decisions/entries/2EXP-format-1-10-0.md)).
 
 The fields have these forms. The relay refuses another form.
 
@@ -478,7 +497,9 @@ the layout of the package. The CPU name, the commit and the id are example value
 
 One report is one `certify()` call. It covers each selected pair of an execution provider (EP) and
 a GPU. An EP that was not selected is not in the report. A selected pair that cannot run has the
-result `not-run`, with a reason such as `ep-not-installed`, `gpu-not-usable` or `not-gpu-ep`.
+result `not-run`, with a reason such as `ep-not-installed` or `gpu-not-usable`. A check that the
+pair can never have is not in the report, for example a probe against the CPU for the CPU EP
+([5.8](#58-what-a-check-writes) rule 1).
 
 **Names.**
 
@@ -496,8 +517,11 @@ result `not-run`, with a reason such as `ep-not-installed`, `gpu-not-usable` or 
   result `record-only` and the reason `hung-at-exit` or `crashed`.
 - `module` of each check of a pair, of its JPEG rows and of its `<name>:exit` row is the EP name,
   for example `TensorRT RTX`. A `suite:*` check has no `module`.
-- A check can have `numbers`, for example `seconds`, `frames`, `ep_ms`, `cpu_ms`,
-  `max_abs_diff`, `speed_against_cpu` and `exit_code`.
+- A check can have `numbers`, for example `seconds`, `ep_ms`, `cpu_ms`, `max_abs_diff` and
+  `exit_code`. A value that is the same in each row of the run, for example the count of test
+  frames or of timed calls, is in `details` one time, not in `numbers`. A value that a reader can
+  compute from the other numbers of the row is not in `numbers`
+  ([5.8](#58-what-a-check-writes) rule 6).
 
 **Level `quick`.** The quick run has a limit of 65 seconds. A check that does not fit in it is
 `not-run` with `over-budget`. The CPU EP runs only as the reference for a pair that is not
@@ -517,9 +541,9 @@ reviewed. A pair that has a reviewed pass does not run. It gets an `ep` item `sk
 4. The other pairs.
 
 - `<x>:pipeline-<n>` is the timing of the pipeline at `<n>` cameras. Its result is `record-only`.
-  Its `numbers` are `cameras`, `start_seconds`, `first_call_ms`, `calls`, `median_ms`, `p95_ms`,
+  Its `numbers` are `cameras`, `start_seconds`, `first_call_ms`, `median_ms`, `p95_ms`,
   `vram_before_mib` and `peak_vram_mib` (`null` when there is no VRAM reader). A pair on a GPU also
-  has `against_cpu` and `speed_against_cpu`.
+  has `against_cpu`. The count of timed calls is `details.full.timed_calls`.
 - A timing is `not-run` with the class name of an exception as the reason when the run raised, for
   example when there is no VRAM at 6 cameras. It is `not-run` with `video-not-passed` when the
   check `<label>:video` did not pass, and with `models-missing` on the CPU EP when a model file is absent. It is
@@ -529,10 +553,12 @@ reviewed. A pair that has a reviewed pass does not run. It gets an `ep` item `sk
   `no-check`. It exists for `cpu` and for `cuda`, `trt-rtx`, `directml`, `amdgpu` and `migraphx`
   on a GPU.
 - `<x>:jpeg:<name>` is one check of the JPEG certification, for example `cpu_decode.baseline_420`,
-  `gpu_decode.baseline_422` or `preprocess_graph.yolox_person`. There are 66 names for each target
-  today. The result is `pass`, `fail`, `not-run` or `record-only`. The reason keeps the code of the
-  JPEG module, with underscores, for example `ep_not_present`, `no_gpu_decode_on_ep` or
-  `over_limit`. A report of `directml` shows `no_gpu_decode_on_ep` for each `gpu_decode` name.
+  `gpu_decode.baseline_422` or `preprocess_graph.yolox_person`. The JPEG certification has 66 names
+  today. A target has only the names that it can have. A name whose result cannot differ between
+  two targets of one run is in the report one time ([5.8](#58-what-a-check-writes) rules 1 and 2).
+  The result is `pass`, `fail`, `not-run` or `record-only`. The reason keeps the code of the JPEG
+  module, with underscores, for example `ep_not_present` or `over_limit`. A report of `directml`
+  has no `gpu_decode` name, because DirectML has no GPU JPEG decode.
 - A full report has no `<label>:jpeg-decode` and no `<label>:jpeg-preprocess`.
 - With no EP at all, `full` still runs the CPU checks. For `certify("full")`, it installs nothing
   and it downloads only the test image. It reads `<sha256>.zip` in `test_media_dir`
@@ -590,7 +616,7 @@ reviewed. A pair that has a reviewed pass does not run. It gets an `ep` item `sk
 
 ```json
 {
- "schema": "skellycertify.report/1.9.0",
+ "schema": "skellycertify.report/1.10.0",
  "id": "3f2b8c1e-9a4d-4e7b-b6a1-0c5d2e8f7a90",
  "package": {"name": "skellytracker", "version": "2024.9.1019",
              "commit": "0123456789abcdef0123456789abcdef01234567", "tree_modified": false},
@@ -600,10 +626,10 @@ reviewed. A pair that has a reviewed pass does not run. It gets an `ep` item `sk
   "os": {"name": "Windows", "release": "11", "version": "10.0.26300", "build": 26300,
          "label": "Windows 11 Home 26H2", "arch": "x86_64"},
   "cpu": {"name": "Intel(R) Core(TM) i7-14700K"},
-  "memory_bytes": 68388003840,
+  "memory_bytes": 68387078144,
   "gpus": [
    {"vendor": "nvidia", "name": "NVIDIA GeForce RTX 3070", "id": "10de:2484", "driver_version": "610.88",
-    "vram_bytes": 8589934592, "shared_memory_bytes": 34194001920}
+    "vram_bytes": 8589934592, "shared_memory_bytes": 34193014784}
   ]
  },
  "summary": [
@@ -616,20 +642,17 @@ reviewed. A pair that has a reviewed pass does not run. It gets an `ep` item `sk
  ],
  "checks": [
   {"name": "cpu:video", "result": "pass", "reason": null, "module": "CPU",
-   "numbers": {"frames": 30, "cpu_ms": 16.1, "seconds": 5.0}},
+   "numbers": {"cpu_ms": 16.1, "seconds": 5.0}},
   {"name": "directml@10de-2484-0:probe", "result": "pass", "reason": null, "module": "DirectML",
-   "numbers": {"seconds": 1.2, "max_abs_diff": 9.5367431640625e-07}},
+   "numbers": {"seconds": 1.2, "max_abs_diff": 9.537e-07}},
   {"name": "directml@10de-2484-0:live", "result": "pass", "reason": null, "module": "DirectML",
-   "numbers": {"frames": 30, "ep_ms": 3.3}},
+   "numbers": {"ep_ms": 3.3}},
   {"name": "directml@10de-2484-0:pipeline-1", "result": "record-only", "reason": null, "module": "DirectML",
-   "numbers": {"cameras": 1, "start_seconds": 1.44, "first_call_ms": 24.8, "calls": 100, "median_ms": 3.44,
-               "p95_ms": 3.65, "vram_before_mib": 0, "peak_vram_mib": 279, "against_cpu": 0.21,
-               "speed_against_cpu": "faster"}},
-  {"name": "directml@10de-2484-0:jpeg:gpu_decode.baseline_420", "result": "not-run",
-   "reason": "no_gpu_decode_on_ep", "module": "DirectML"},
+   "numbers": {"cameras": 1, "start_seconds": 1.44, "first_call_ms": 24.8, "median_ms": 3.44,
+               "p95_ms": 3.65, "vram_before_mib": 0, "peak_vram_mib": 279, "against_cpu": 0.21}},
   {"name": "directml@10de-2484-0", "result": "pass", "reason": null, "module": "DirectML"},
   {"name": "cpu:pipeline-1", "result": "record-only", "reason": null, "module": "CPU",
-   "numbers": {"cameras": 1, "start_seconds": 1.25, "first_call_ms": 122.0, "calls": 100, "median_ms": 16.08,
+   "numbers": {"cameras": 1, "start_seconds": 1.25, "first_call_ms": 122.0, "median_ms": 16.08,
                "p95_ms": 17.85, "vram_before_mib": 0, "peak_vram_mib": 0}}
  ],
  "cleanup": [],
@@ -647,7 +670,7 @@ reviewed. A pair that has a reviewed pass does not run. It gets an `ep` item `sk
                             "warnings": ["batch_limited_by_state"]}
   },
   "full": {"camera_counts": [1, 3, 6], "warmup_calls": 10, "timed_calls": 100, "running_mode": "video"},
-  "versions": {"ort_distribution": "onnxruntime-windowsml", "ort_version": "1.30.0.202609102321",
+  "versions": {"python": "3.12.10", "ort_distribution": "onnxruntime-windowsml", "ort_version": "1.30.0.202609102321",
                "windowsml": "2.6.74rc0", "catalog_revision": "<64 hex digits>",
                "set_hash": "4abfaa7678817ed4a8ccb5f3e355ba28672589e8a3468bb6805e491dfe03a302"},
   "skipped": {},
@@ -657,7 +680,9 @@ reviewed. A pair that has a reviewed pass does not run. It gets an `ep` item `sk
 }
 ```
 
-The example shows 7 of the many checks of a real full report. It shows one of two `models` items.
+The example shows 6 of the many checks of a real full report. It shows one of two `models` items.
+It puts a long check on two or three lines, so that a person can read it. A report file has each
+check on one line ([4.2](#42-layout), "The lines of the data block").
 A full run writes a report file. skellytracker uses the `id` also as the file name and as the
 hand-in id. Older files of schema 1.0.0 stay readable and have no `id`.
 
@@ -798,7 +823,7 @@ One report file holds one JSON object:
 
 | Field | Meaning |
 |---|---|
-| `schema` | `skellycertify.report/1.9.0`. |
+| `schema` | `skellycertify.report/1.10.0`. |
 | `app` | `name`, `version` (SemVer) and `commit` of the app, or `null` for a report of one package that ran alone. |
 | `modules` | A list of module reports. The list holds at least one module report. A package can give more than one module report, for example one for each run. Each module report is independent ([7.1](#71-validity)). |
 | `note` | The one free-text note of the person, or `null`. At most 2000 characters. It must be a clean note (rule 18 of [section 6](#6-privacy-rules)). |
@@ -886,12 +911,15 @@ line between two parts:
    - The order is the order of `modules`, then of `summary`.
    - A file with no `ep` item and no GPU in any `host.gpus` has no GPU table.
 5. Only when a module has a `benchmark` item: the benchmark table
-   `| GPU | Module | Stage | ms/frame | FPS |`. It has one row for each `benchmark` item, in the
-   order of `modules`, then of `summary`. `GPU` is as in the GPU table, and `-` when `device` is
-   `null`. `Module` is the `name` of the item. `Stage` is `stage`. `ms/frame` and `FPS` are
-   `ms_per_frame` and `fps` with one decimal place, for example `12.4`. `ms/frame` is the time to
-   process one frame set (one frame of each camera of the stage), and `FPS` is the frame sets for
-   each second ([3.7](#37-summary)).
+   `| GPU | Module | Stage | ms/frame set | Frame sets/s |`. It has one row for each `benchmark`
+   item, in the order of `modules`, then of `summary`. `GPU` is as in the GPU table, and `-` when
+   `device` is `null`. `Module` is the `name` of the item. `Stage` is `stage`. `ms/frame set` and
+   `Frame sets/s` are `ms_per_frame` and `fps` with one decimal place, for example `12.4`.
+   `ms/frame set` is the time to process one frame set (one frame of each camera of the stage), and
+   `Frame sets/s` is the frame sets for each second ([3.7](#37-summary)). The names of the fields
+   `ms_per_frame` and `fps` do not change. A writer of 1.9.0 or earlier prints the header
+   `| GPU | Module | Stage | ms/frame | FPS |` with the same meaning
+   ([ADR-2EXP](decisions/entries/2EXP-format-1-10-0.md)).
 6. Only when a module has a `component` item: the component table `| Module | Result |`. It has one
    row for each `component` item, in the order of `modules`, then of `summary`. `Module` is the
    `name` of the item. `Result` uses the display words of the GPU table
@@ -903,8 +931,8 @@ line between two parts:
    - It has one row for each check with the result `fail`.
    - It has one row for each check with the result `not-run` when its module report has a summary
      item with the `result` `partial` or `fail` and a `name` equal to the `module` of the check
-     ([3.4](#34-check)). A `not-run` check with no such item has no row, because a system has many
-     checks that cannot run on it.
+     ([3.4](#34-check)). A `not-run` check with no such item has no row. A check that the system
+     can never have is not in the report ([5.8](#58-what-a-check-writes) rule 1).
    - The table always names the check, never only its section. The exception is a section with the
      result `fail` and no check of its own, for example a section that crashed
      ([3.5](#35-section)). It gets one row with the name of the section in `Test`.
@@ -918,6 +946,14 @@ line between two parts:
 10. Last: the heading `## Data` and one fenced code block with the info string `json`. It holds
     the object of [4.1](#41-content). The fence has at least 3 backticks. It is longer than each
     run of backticks in the JSON.
+
+**The lines of the data block.** The writer of a report file prints each item of the `checks` list
+of each module report on one line. That line holds the whole item and nothing else, other than the
+indent before the item and the `,` after it. The writer does not put a line break inside the item.
+The rest of the block is valid JSON in a layout that the writer chooses. For example, each other
+object can have one field on each line, with an indent of one space for each level. A reader, also
+the relay, accepts each layout of valid JSON
+([ADR-2EXP](decisions/entries/2EXP-format-1-10-0.md)).
 
 The Markdown shows a result as `pass`, `fail`, `record`, `partial`, `skipped (busy)`,
 `skipped (already reviewed)`, `skipped (not installed)` or `skipped (declined)`. Part 8 also shows
@@ -940,7 +976,7 @@ change. A writer shortens a name only for the Markdown:
 - CPU: remove `(R)`, `(TM)`, a generation prefix (for example `13th Gen`), a clock speed (for
   example `CPU @ 3.60GHz`) and a core-count suffix (for example `8-Core Processor`). Example:
   `AMD Ryzen 7 7700X 8-Core Processor` → `AMD Ryzen 7 7700X`.
-- RAM and VRAM: whole GB, from the bytes divided by 2^30 and rounded. Example: 68388003840 bytes →
+- RAM and VRAM: whole GB, from the bytes divided by 2^30 and rounded. Example: 68387078144 bytes →
   `64 GB`. A VRAM of less than 1 GB is not shown in the `GPU` cell.
 - OS: `os.label` without the edition words `Home` and `Pro`. Example: `Windows 11 Home 26H2` →
   `Windows 11 26H2`.
@@ -1003,17 +1039,17 @@ Note of the person:
 
 ```json
 {
- "schema": "skellycertify.report/1.9.0",
+ "schema": "skellycertify.report/1.10.0",
  "app": {"name": "freemocap", "version": "2.0.0", "commit": "89abcdef0123456789abcdef0123456789abcdef"},
  "modules": [
-  {"schema": "skellycertify.report/1.9.0", "package": {"name": "skellytracker", "...": "..."},
+  {"schema": "skellycertify.report/1.10.0", "package": {"name": "skellytracker", "...": "..."},
    "summary": [
     {"group": "ep", "name": "CUDA", "device": "10de:2484", "result": "skipped", "reason": "reviewed"},
     {"group": "ep", "name": "DirectML", "device": "10de:2484", "result": "pass"},
     {"group": "ep", "name": "CPU", "device": null, "result": "record-only"},
     {"group": "component", "name": "MediaPipe", "device": null, "result": "skipped", "reason": "reviewed"}
    ]},
-  {"schema": "skellycertify.report/1.9.0", "package": {"name": "skellycam", "...": "..."},
+  {"schema": "skellycertify.report/1.10.0", "package": {"name": "skellycam", "...": "..."},
    "summary": [
     {"group": "camera", "name": "Logitech C922", "device": "046d:085c", "result": "partial"},
     {"group": "camera", "name": "Razer Kiyo Pro", "device": "1532:0e05", "result": "skipped", "reason": "busy"}
@@ -1199,14 +1235,68 @@ Each package keeps one list of all its check names
   holds no list.
 - A name with a variable part is in the list in its template form, for example
   `<label>:usb3-trial`.
-- Each entry gives the name and the level: `quick`, `full` or both. Only these two are required. A
-  package can add more to an entry.
+- Each entry gives the name and the level: `quick`, `full` or both. An entry of an experimental
+  check also gives the device classes that the check runs on ([5.8](#58-what-a-check-writes) rule
+  8). Only these are required. A package can add more to an entry.
 - The list is machine-readable: a tool can read each entry exactly. The list is in one place. The
   format sets no form for the list. [Section 9](#9-packages) names the place of the list of each
   package.
 - A new check goes into the list before its code, or in the same commit.
 - The package must have two tests. First, each check name that a run writes matches an entry of the
   list. Second, each entry is known to the code of the package, or the list marks it as not built.
+
+### 5.8 What a check writes
+
+Each package must obey these rules. They keep the report short, with no row that carries no
+information ([2.7](#27-the-two-levels), "Aims";
+[ADR-ZW66](decisions/entries/ZW66-what-a-check-writes-and-the-aims-of-both-levels.md)).
+
+1. **No row for a check that cannot exist.** A report has no row for a check that the device, the
+   EP or the component of that row can never have. For example, the report has no check of a GPU
+   JPEG decode for an EP that has no GPU JPEG decode. `not-run` is only for a check that the item
+   can have at the level of the run and that did not run. Its reason tells why, for example
+   `over-budget`, `not-selected`, `not-built` or `cancelled` ([5.3](#53-common-reason-codes)).
+2. **One row for a test with one result.** A test whose result cannot differ between two labels of
+   one run (for example two pairs of an EP and a GPU, [3.6](#36-example-skellytracker)) runs one
+   time. It is in the report one time, not one time for each label.
+3. **An error.** A check that catches an error writes these two facts:
+   - The class name of the exception, with no module path. It is the reason code, or a value in
+     `numbers` or in `details`. It has the form of a reason code ([5.2](#52-reason-codes)).
+   - The error number of the OS or of the library, as a number in `numbers` or in `details`: for
+     example an HRESULT on Windows, `errno` on Linux and macOS, or the return code of the library.
+     An HRESULT is the unsigned 32-bit value, for example `2289696773` for `0x887A0005`.
+
+   When the error has no number, the check writes only the class name. The check never writes the
+   message text of the error ([5.2](#52-reason-codes), rule 10 of [section 6](#6-privacy-rules)).
+4. **A failure in a series.** A check that fails on one item of a series, for example a frame, a
+   repeat or a camera, writes the index of that item and the numbers of that item. It does not
+   write the numbers of the first item of the series. The index starts at 0. When more than one item
+   fails, the check writes the first item that failed. For a camera, the index is the position of
+   the camera among the cameras of the check, in the order of the run. It is not a camera id of the
+   OS ([section 6](#6-privacy-rules), allowed facts).
+5. **Runtime versions.** A report records the version of each runtime that a check result depends
+   on, for example Python and the library that the check ran. `package.version`
+   ([3.2](#32-package)) and `host.os` ([3.3](#33-host)) give the package and the OS. The format has
+   no field for the other versions. The package writes them in `details`, one time for the run, for
+   example `details.versions` of skellytracker ([3.6](#36-example-skellytracker)).
+6. **A value one time.**
+   - A value of `numbers` that is the same in each row of a run, for example a limit, a constant or
+     a count of repeats, is in `details` one time for the run. It is not in each row.
+   - A derived value is not in `numbers` or in `details` beside its inputs. A field that this format
+     defines is not a derived value of this rule, for example `fps` of a `benchmark` item
+     ([3.7](#37-summary)).
+   - A number has no more digits than its meaning needs. For a timing, 4 significant digits are
+     enough, for example `16.08` and not `16.0812345`.
+7. **The pass limit.** The pass limit of a judged number is in the report one time. A reader can
+   then see how far the value is from its limit. A limit that is the same for each check of the run
+   is in `details` (rule 6). A limit of one check only is in `numbers` of that check.
+8. **An experimental check.** A check of an experimental method
+   ([5.6](#56-when-a-check-can-exist-and-its-level), "The level of a check", item 5) runs only on
+   the device classes that the package names for it, for example only on a dedicated GPU. A device
+   class is a kind of device that the package names, for example a dedicated GPU, an integrated GPU
+   or a USB camera. The entry of the check in the list of check names
+   ([5.7](#57-the-list-of-check-names-of-a-package)) gives its device classes. The check does not
+   run on a device of another class, and the report has no row of it for that device (rule 1).
 
 ## 6. Privacy rules
 
@@ -1320,7 +1410,8 @@ Allowed facts: model names of a CPU, a GPU or a camera, PCI vendor and device id
 product ids, driver and package versions, the OS label, and test results. These facts identify a
 model, not one unit. There is no exception. A report holds no fact that identifies one camera
 unit: no unit id, no serial number, no device path and no camera id of the OS
-([ADR-6GAN](decisions/entries/6GAN-no-unit-id-of-a-camera.md)).
+([ADR-6GAN](decisions/entries/6GAN-no-unit-id-of-a-camera.md)). A memory size is in whole MiB
+([3.3](#33-host), "Memory in whole MiB").
 
 ## 7. Evidence validity
 
@@ -1409,6 +1500,22 @@ the capture backend and the OS. Camera evidence is not part of an EP row.
 
 Changes of the format:
 
+- 1.10.0: A module report can have the optional field `seconds`: the length of the whole run of
+  the package in seconds ([3.1](#31-fields)). The benchmark table has the header
+  `| GPU | Module | Stage | ms/frame set | Frame sets/s |` ([4.2](#42-layout) part 5). The names of
+  the fields `ms_per_frame` and `fps` do not change. A writer rounds `memory_bytes`, `vram_bytes`
+  and `shared_memory_bytes` down to a whole MiB ([3.3](#33-host)). The writer of a report file
+  prints each item of `checks` on one line of the data block ([4.2](#42-layout), "The lines of the
+  data block"). This is a minor change: it adds one optional field. The other changes are rules for
+  a writer and a header of the layout. They add no allowed value and change the meaning of no
+  field. The relay accepts a memory value that is not a whole MiB and each layout of the data
+  block. A reader of major version 1 still accepts a file of 1.9.0 or earlier
+  ([ADR-2EXP](decisions/entries/2EXP-format-1-10-0.md)).
+  These changes of the text are also in 1.10.0. They change no field, no allowed value and no check
+  of the relay: the two aims of both levels ([2.7](#27-the-two-levels)), the exact count of `total`
+  ([2.6](#26-the-plan-function)) and the new [5.8](#58-what-a-check-writes), which tells what a
+  check writes
+  ([ADR-ZW66](decisions/entries/ZW66-what-a-check-writes-and-the-aims-of-both-levels.md)).
 - 1.9.0: An `ep`, `gpu-jpeg`, `camera` or `component` summary item can have `skipped` with the new
   reason `declined`, shown as `skipped (declined)`. It tells that the person declined each setup
   that the checks of the item need, so no check of the item ran ([2.6](#26-the-plan-function),
@@ -1534,7 +1641,7 @@ These are the only packages of this format.
 
 | Package | Evidence for | `certify()` | Reason codes | Evidence rows |
 |---|---|---|---|---|
-| skellytracker | execution providers (EPs) | `skellytracker.certify` and `skellytracker.certify_plan`, levels `quick` and `full`. Package options: `execution_providers`, `pipeline`. The tool `tools/certify_platform.py` writes a report file of this format (schema 1.9.0; see [3.6](#36-example-skellytracker)). | `skellytracker/REASON_CODES.md` | `skellytracker/core/eps/ep_evidence.yaml` (EPs); this repository for the other sections |
+| skellytracker | execution providers (EPs) | `skellytracker.certify` and `skellytracker.certify_plan`, levels `quick` and `full`. Package options: `execution_providers`, `pipeline`. The tool `tools/certify_platform.py` writes a report file of this format (schema 1.10.0; see [3.6](#36-example-skellytracker)). | `skellytracker/REASON_CODES.md` | `skellytracker/core/eps/ep_evidence.yaml` (EPs); this repository for the other sections |
 | freemocap | the app on an OS: it starts a child process, loads its bundled modules and can write its data folder | `freemocap.certify` and `freemocap.certify_plan`, level `quick`. The level `full` is not built. Package options: `ui_remote`, `blender_exe_path`. | the docstring of `freemocap/certification.py` | none yet |
 | skellycam | cameras ([7.4](#74-camera-evidence)) | not yet implemented | not yet implemented | not yet implemented |
 

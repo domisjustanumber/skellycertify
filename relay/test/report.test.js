@@ -279,6 +279,59 @@ test('declined 1.9.0: a reason of skipped for each group with a result', () => {
   }
 });
 
+test('1.10.0: a two-digit minor version is accepted', () => {
+  const d = validData();
+  d.schema = 'skellycertify.report/1.10.0';
+  d.modules[0].schema = 'skellycertify.report/1.10.0';
+  assert.ok(parse(reportFile(d)));
+  for (const s of ['skellycertify.report/1.010.0', 'skellycertify.report/1.10']) {
+    const e = validData();
+    e.schema = s;
+    refused(reportFile(e), 'wrong-schema', 'report.schema');
+  }
+});
+
+test('seconds 1.10.0: optional; when present a number of 0 or more, not null (section 3.1)', () => {
+  for (const seconds of [0, 271.4, 3600]) {
+    const d = validData();
+    d.modules[0].seconds = seconds;
+    assert.ok(parse(reportFile(d)), String(seconds));
+  }
+  assert.ok(parse(reportFile(validData())), 'no seconds');
+  for (const seconds of [-1, null, '271.4', true, [], {}]) {
+    const e = validData();
+    e.modules[0].seconds = seconds;
+    refused(reportFile(e), 'bad-value', 'report.modules[0].seconds');
+  }
+});
+
+test('memory 1.10.0: a writer rounds down to a whole MiB; the relay still accepts an exact count (section 3.3)', () => {
+  const d = validData();
+  d.modules[0].host.memory_bytes = 68388003840; // not a multiple of 1,048,576: an older report
+  d.modules[0].host.gpus[0].vram_bytes = 8589934591;
+  d.modules[0].host.gpus[0].shared_memory_bytes = 34194001920;
+  assert.ok(parse(reportFile(d)));
+  d.modules[0].host.memory_bytes = 68387078144; // 65219 MiB
+  d.modules[0].host.gpus[0].shared_memory_bytes = 34193014784; // 32609 MiB
+  assert.ok(parse(reportFile(d)));
+});
+
+test('data block 1.10.0: the relay reads one check on each line, one indent for each field, and one line', () => {
+  const d = validData();
+  const checks = d.modules[0].checks;
+  const marker = '"__checks__"';
+  d.modules[0].checks = '__checks__';
+  const perLine = JSON.stringify(d, null, 1).replace(marker, `[\n${checks.map((c) => `  ${JSON.stringify(c)}`).join(',\n')}\n ]`);
+  assert.ok(checks.length > 1);
+  const lines = perLine.split('\n').map((l) => l.trim().replace(/,$/, ''));
+  assert.ok(checks.every((c) => lines.includes(JSON.stringify(c))), 'each check on its own line');
+  d.modules[0].checks = checks;
+  const file = (json) => `# Certify report\n\n## Data\n\n\`\`\`json\n${json}\n\`\`\`\n`;
+  for (const json of [perLine, JSON.stringify(d, null, 1), JSON.stringify(d)]) {
+    assert.deepEqual(parse(file(json)).data, d);
+  }
+});
+
 test('test_media 1.6.0: optional; at most 50 items of name, sha256, bytes and source (section 3.9)', () => {
   const item = { name: 'quick_frames.zip', sha256: 'a973456f417eab8e24ea8aa3f118a48142aa55143af69c73ee6799cb4f94c1f4', bytes: 6215661, source: 'bundled' };
   const ok = [

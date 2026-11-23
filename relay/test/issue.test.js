@@ -146,7 +146,7 @@ test('the body of the valid sample is the summary of 4.2, with the link and the 
     '| - | `CPU` | pass |',
     '| `Intel UHD 770` | | not checked |',
     '',
-    '| GPU | Module | Stage | ms/frame | FPS |',
+    '| GPU | Module | Stage | ms/frame set | Frame sets/s |',
     '|---|---|---|---|---|',
     '| `NVIDIA RTX 3070 8 GB` | `CUDA` | `pipeline-1` | 12.4 | 80.6 |',
     '| - | `CPU` | `pipeline-1` | 95.0 | 10.5 |',
@@ -257,7 +257,7 @@ test('benchmark table: GPU cell as in the GPU table, figures with one decimal pl
     { group: 'benchmark', name: 'CUDA', device: '10de:9999', stage: 'detect', ms_per_frame: 0, fps: 1234.56 },
   ];
   const lines = buildBody(args(d)).split('\n');
-  const i = lines.indexOf('| GPU | Module | Stage | ms/frame | FPS |');
+  const i = lines.indexOf('| GPU | Module | Stage | ms/frame set | Frame sets/s |');
   assert.ok(lines[i - 2].endsWith('| not checked |'), 'directly after the GPU table');
   assert.deepEqual(lines.slice(i + 1, i + 5), [
     '|---|---|---|---|---|',
@@ -325,6 +325,16 @@ test('1.9.0: skipped (declined) for an ep, gpu-jpeg, camera and component item; 
   assert.ok(body.includes('| `Blender` | skipped (declined) |'));
   assert.ok(body.includes('| `Logitech C922` | skipped (declined) |'));
   assert.doesNotMatch(body, /not-selected|cuda@10de-2484-0:lamp|low-light/, 'a skipped item: its not-run checks have no row (4.2 part 8)');
+});
+
+test('1.10.0: seconds does not print; the benchmark table has the header of 4.2 part 5', () => {
+  const d = validData();
+  d.modules[0].seconds = 271.4;
+  const body = buildBody(args(d));
+  assert.equal(body, buildBody(args(validData())));
+  assert.doesNotMatch(body, /271/);
+  assert.ok(body.includes('| GPU | Module | Stage | ms/frame set | Frame sets/s |\n|---|---|---|---|---|\n'));
+  assert.doesNotMatch(body, /\| ms\/frame \| FPS \|/, 'not the header of 1.9.0');
 });
 
 test('the header time of a file with two or more modules is the oldest created_utc (4.2)', () => {

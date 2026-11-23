@@ -59,7 +59,10 @@ of 4.2.
   `fail`, `record`, `partial`, `skipped (busy)`, `skipped (already reviewed)`,
   `skipped (not installed)` or `skipped (declined)`. Only a `component` item can have
   `skipped (not installed)`. Each item with a result can have `skipped (declined)`.
-- Only when a module has a `benchmark` item: the table `| GPU | Module | Stage | ms/frame | FPS |`.
+- Only when a module has a `benchmark` item: the table
+  `| GPU | Module | Stage | ms/frame set | Frame sets/s |` of 4.2 part 5 (format 1.10.0). The issue
+  shows this header also for a file of an earlier version. The relay does not check the header in
+  the Markdown part of the file.
 - Only when a module has a `component` item: the table `| Module | Result |` of 4.2 part 6, with
   one row for each `component` item. A `component` item must have `device` `null`.
 - The camera table, or the line `Cameras: not checked on this system.`
@@ -76,8 +79,12 @@ of 4.2.
 
 The body does not show `notices` ([report-format.md 3.8](../report-format.md#38-notices)). They are
 for the person at the app. The relay checks their form only. The body also does not show
-`test_media` ([report-format.md 3.9](../report-format.md#39-test_media)) or
-`shared_memory_bytes` of `host.gpus`. The relay checks their form only.
+`test_media` ([report-format.md 3.9](../report-format.md#39-test_media)),
+`shared_memory_bytes` of `host.gpus` or `seconds` of a module
+([report-format.md 3.1](../report-format.md#31-fields)). The relay checks their form only. It reads
+each layout of the JSON block, also one check on each line
+([report-format.md 4.2](../report-format.md#42-layout)). It accepts a memory value that is not a
+whole MiB ([report-format.md 3.3](../report-format.md#33-host)).
 
 If the body is longer than 65,536 characters, the relay removes rows from the end of the tables
 and says so. It removes the rows of the checks that did not pass first, then the benchmark rows, the component rows, the
@@ -456,8 +463,10 @@ Success: `HTTP 200`, `"duplicate":false` and a line `Issue: https://github.com/d
    - it has the labels `certify-report` and `relay-test`;
    - the first line says `Test of the relay`;
    - the title is `[certify] FMC 2.0.0 · Win 11 26H2 · NVIDIA RTX 3070, Intel UHD 770`;
-   - the module line, the system list, the GPU table and the benchmark table agree with the
-     Markdown part of `samples/valid.md`. That sample has no row of a check that did not pass, so the body has no `Checks that did not pass:` table;
+   - the module line, the system list, the GPU table and the rows of the benchmark table agree with
+     the Markdown part of `samples/valid.md`. The sample is a file of format 1.4.0, so its benchmark
+     header is `| GPU | Module | Stage | ms/frame | FPS |`. The issue shows the header of 1.10.0.
+     That sample has no row of a check that did not pass, so the body has no `Checks that did not pass:` table;
    - the author is your account (Part 2 changes this to the app).
 2. Click the link of the report file. GitHub shows `inbox/test/<sha256>.md` at one commit.
 3. Open `https://github.com/domisjustanumber/skellycertify/tree/inbox/inbox/test`. It holds the

@@ -233,7 +233,7 @@ export function buildBody({ data, hash, filePath, fileUrl, testMode }) {
     const notPassed = lists[4].length ? ['Checks that did not pass:', '', ...table(4, '| Package | Module | Test | Result | Reason |')] : [];
     return [
       testMode ? ['**Test of the relay.** This issue is never evidence.'] : [],
-      header, system, table(1, '| GPU | Module | Result |'), table(2, '| GPU | Module | Stage | ms/frame | FPS |'),
+      header, system, table(1, '| GPU | Module | Result |'), table(2, '| GPU | Module | Stage | ms/frame set | Frame sets/s |'),
       table(5, '| Module | Result |'), cameras, notPassed, note, tail,
     ].filter((p) => p.length).map((p) => p.join('\n')).join('\n\n');
   };

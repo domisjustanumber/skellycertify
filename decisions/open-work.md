@@ -46,10 +46,10 @@ task. Delete an item when its work is done. The PR that closes an item records t
   skellycam and freemocap must accept the keyword-only option `abandon` of `certify()`
   ([2.4](../report-format.md#24-cancel)). They must write `test_media` for each test media file
   that the checks used ([3.9](../report-format.md#39-test_media)). They must write the schema id
-  `skellycertify.report/1.9.0`, not `skellycertify.report/1.5.0`, when they write the rules of
-  format 1.6.0, 1.7.0, 1.8.0 and 1.9.0 ([ADR-Q02Y](entries/Q02Y-test-media-name-exempt-from-rule-7.md),
+  `skellycertify.report/1.10.0`, not `skellycertify.report/1.5.0`, when they write the rules of
+  format 1.6.0 to 1.10.0 ([ADR-Q02Y](entries/Q02Y-test-media-name-exempt-from-rule-7.md),
   [ADR-974S](entries/974S-format-1-8-0-second-opt-in-for-a-setup.md),
-  [ADR-T3BD](entries/T3BD-format-1-9-0-skipped-reason-declined.md)).
+  [ADR-T3BD](entries/T3BD-format-1-9-0-skipped-reason-declined.md), [ADR-2EXP](entries/2EXP-format-1-10-0.md)).
 - **Each package: write format 1.8.0 ([ADR-974S](entries/974S-format-1-8-0-second-opt-in-for-a-setup.md)).**
   skellytracker, skellycam and freemocap must accept the keyword-only option `setups` of
   `certify()` and `certify_plan()`. Their `certify_plan()` must return the list `setups`, with an
@@ -57,13 +57,35 @@ task. Delete an item when its work is done. The PR that closes an item records t
   setup check whose setup is not in `setups` must be `not-run` with `not-selected`. A declined setup
   must not add `partial-run` ([7.1](../report-format.md#71-validity)). They must name in their
   documentation the setup that each setup check needs. They must write the schema id
-  `skellycertify.report/1.9.0` ([ADR-T3BD](entries/T3BD-format-1-9-0-skipped-reason-declined.md)).
+  `skellycertify.report/1.10.0` ([ADR-T3BD](entries/T3BD-format-1-9-0-skipped-reason-declined.md), [ADR-2EXP](entries/2EXP-format-1-10-0.md)).
 - **Each package: write format 1.9.0 ([ADR-T3BD](entries/T3BD-format-1-9-0-skipped-reason-declined.md)).**
   skellytracker, skellycam and freemocap must give an `ep`, `gpu-jpeg`, `camera` or `component`
   item the result `skipped` with the reason `declined` when no check of the item ran because the
   person declined each setup that its checks need ([3.7](../report-format.md#37-summary),
   [2.6](../report-format.md#26-the-plan-function), "Setups"). They must write the schema id
-  `skellycertify.report/1.9.0`.
+  `skellycertify.report/1.10.0` ([ADR-2EXP](entries/2EXP-format-1-10-0.md)).
+- **Each package: write format 1.10.0 ([ADR-2EXP](entries/2EXP-format-1-10-0.md)).** skellytracker, skellycam and
+  freemocap must write `seconds` in each module report ([3.1](../report-format.md#31-fields)). They
+  must round `memory_bytes`, `vram_bytes` and `shared_memory_bytes` down to a whole MiB
+  ([3.3](../report-format.md#33-host)). Each writer of a report file of a package, for example
+  `tools/certify_platform.py` of skellytracker, must print the benchmark header
+  `| GPU | Module | Stage | ms/frame set | Frame sets/s |` and each item of `checks` on one line of
+  the data block ([4.2](../report-format.md#42-layout)). They must write the schema id
+  `skellycertify.report/1.10.0`.
+- **freemocap: the app side of format 1.10.0 ([ADR-2EXP](entries/2EXP-format-1-10-0.md)).** The Markdown writer of the
+  app must print the benchmark header `| GPU | Module | Stage | ms/frame set | Frame sets/s |`
+  and each item of `checks` of each module report on one line of the data block
+  ([4.2](../report-format.md#42-layout)).
+- **Each package: apply 5.8 to its checks ([ADR-ZW66](entries/ZW66-what-a-check-writes-and-the-aims-of-both-levels.md)).** skellytracker, skellycam and
+  freemocap must check each check against [5.8](../report-format.md#58-what-a-check-writes). Remove
+  each row of a check that its item can never have. Write a test with one result for the run one
+  time. Write the class name and the error number of each caught error. Write the index and the
+  numbers of the failed item of a series. Write the runtime versions and each constant one time, in
+  `details`. Write each pass limit one time. Give the device classes of each experimental check in the list of
+  check names. Count `total` of the plan as [2.6](../report-format.md#26-the-plan-function) says.
+  For skellytracker, this includes the rows with `not-gpu-ep` and `no_gpu_decode_on_ep` (rule 1),
+  the numbers of frame 0 in `<label>:video` (rule 4), and `frames`, `calls`, `speed_against_cpu`
+  and the `cpu_ms` of the CPU reference in each `<label>:video` in `numbers` (rule 6).
 - **freemocap: the second question for a setup
   ([ADR-974S](entries/974S-format-1-8-0-second-opt-in-for-a-setup.md)).** Show each item of
   `setups` of each plan as its own yes/no question before the run, apart from the consent to the

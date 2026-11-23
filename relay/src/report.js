@@ -112,6 +112,7 @@ function checkModule(m, where, year) {
   need(m, 'kind', where, (v) => KINDS.includes(v));
   // The year names the folder on inbox: only this UTC year, the year before or the year after.
   need(m, 'created_utc', where, (v) => str(v) && UTC_RE.test(v) && Math.abs(Number(v.slice(0, 4)) - year) <= 1);
+  if ('seconds' in m) need(m, 'seconds', where, figure); // section 3.1, 1.10.0: the length of the run, not null
   checkHost(need(m, 'host', where, isObj), `${where}.host`);
   const hasSections = 'sections' in m;
   const checks = need(m, 'checks', where, Array.isArray);
