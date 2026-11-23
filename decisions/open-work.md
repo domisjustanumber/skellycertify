@@ -56,8 +56,31 @@ task. Delete an item when its work is done. The PR that closes an item records t
   skellycam and freemocap must accept the keyword-only option `abandon` of `certify()`
   ([2.4](../report-format.md#24-cancel)). They must write `test_media` for each test media file
   that the checks used ([3.9](../report-format.md#39-test_media)). They must write the schema id
-  `skellycertify.report/1.7.0`, not `skellycertify.report/1.5.0`, when they write the rules of
-  format 1.6.0 and 1.7.0 ([ADR-Q02Y](entries/Q02Y-test-media-name-exempt-from-rule-7.md)).
+  `skellycertify.report/1.8.0`, not `skellycertify.report/1.5.0`, when they write the rules of
+  format 1.6.0, 1.7.0 and 1.8.0 ([ADR-Q02Y](entries/Q02Y-test-media-name-exempt-from-rule-7.md),
+  [ADR-974S](entries/974S-format-1-8-0-second-opt-in-for-a-setup.md)).
+- **Each package: write format 1.8.0 ([ADR-974S](entries/974S-format-1-8-0-second-opt-in-for-a-setup.md)).**
+  skellytracker, skellycam and freemocap must accept the keyword-only option `setups` of
+  `certify()` and `certify_plan()`. Their `certify_plan()` must return the list `setups`, with an
+  empty list at the level `quick` ([2.6](../report-format.md#26-the-plan-function), "Setups"). A
+  setup check whose setup is not in `setups` must be `not-run` with `not-selected`. A declined setup
+  must not add `partial-run` ([7.1](../report-format.md#71-validity)). They must name in their
+  documentation the setup that each setup check needs. They must write the schema id
+  `skellycertify.report/1.8.0`.
+- **freemocap: the second question for a setup
+  ([ADR-974S](entries/974S-format-1-8-0-second-opt-in-for-a-setup.md)).** Show each item of
+  `setups` of each plan as its own yes/no question before the run, apart from the consent to the
+  full run ([2.6](../report-format.md#26-the-plan-function), "Setups"). Give the `id` of each
+  accepted setup to `certify()` of that package in the option `setups`.
+- **Each package: check the existing checks against 5.6
+  ([ADR-TWK1](entries/TWK1-when-a-check-can-exist-and-the-aims-of-the-levels.md)).**
+  skellytracker, skellycam and freemocap must check each existing check against
+  [5.6](../report-format.md#56-when-a-check-can-exist-and-its-level): when it can exist and its
+  level. Move a check that gives the same answer on each system to the test suite of the package
+  (CI). Run each check that can block a device after the safe checks
+  ([2.7](../report-format.md#27-the-two-levels), "Order of the checks"). Name in the specification
+  of the package the question of each `record-only` check, and what turns it into a judged check or
+  removes it.
 - **skellytracker: the GPU memory and the bundled test media
   ([ADR-9FHP](entries/9FHP-format-1-6-0.md)).** Write `shared_memory_bytes` in each item of
   `host.gpus` ([3.3](../report-format.md#33-host)). When the test media folder does not hold a

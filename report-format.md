@@ -1,6 +1,6 @@
 # Report format
 
-**Status:** draft. Format version 1.7.0.
+**Status:** draft. Format version 1.8.0.
 
 This document is the contract between the freemocap packages, the freemocap app and this
 repository. Each package implements it in its own code. There is no shared code package.
@@ -57,8 +57,9 @@ The function returns one module report ([section 3](#3-the-module-report)).
 **Package options.** A package can add its own options after these three arguments. Each option
 must be keyword-only and must have a default. The call `certify(level)` must always work.
 `certify_plan` takes the same options. The package gives its options in its own documentation.
-The format also has two keyword-only options that each package must accept: `abandon`
-([2.4](#24-cancel)) and `test_media_dir` ([2.8](#28-the-test-media-folder)).
+The format also has three keyword-only options that each package must accept: `abandon`
+([2.4](#24-cancel)), `test_media_dir` ([2.8](#28-the-test-media-folder)) and `setups`
+([2.6](#26-the-plan-function), "Setups").
 For example, skellytracker takes the execution providers to check and the pipeline of the user:
 
 ```python
@@ -67,7 +68,10 @@ certify("quick", progress, cancel, execution_providers=["cuda"], pipeline=config
 
 An option changes which checks run. It does not change the format of the report. When an option
 selects only a part of the checks of a level, the report is not valid as evidence (`partial-run`),
-unless the rules of the package say that the selected part is complete for one item.
+unless the rules of the package say that the selected part is complete for one item. The option
+`setups` is an exception: a setup that the person declined does not make the run `partial-run`
+([2.6](#26-the-plan-function), "Setups";
+[ADR-974S](decisions/entries/974S-format-1-8-0-second-opt-in-for-a-setup.md)).
 
 ### 2.3 Progress messages
 
@@ -240,7 +244,8 @@ It loads no GPU library and downloads nothing. It returns:
    "sha256": "4abfaa7678817ed4a8ccb5f3e355ba28672589e8a3468bb6805e491dfe03a302"}
  ],
  "system_changes": [],
- "questions": []
+ "questions": [],
+ "setups": []
 }
 ```
 
@@ -264,7 +269,48 @@ the app shows the `risks` of each package. The app must not ask the person to ru
 `total` of each package is 0. After the run, the app asks the questions and puts the answers in
 `answers`.
 
+**Setups.** A setup check needs a specific setup from the person, for example a certain light or a
+plug moved to another port ([5.6](#56-when-a-check-can-exist-and-its-level)). It runs only after a
+second opt-in of the person
+([ADR-974S](decisions/entries/974S-format-1-8-0-second-opt-in-for-a-setup.md)).
+
+- The plan can have the optional list `setups`. No list or an empty list means that the run has no
+  setup check. Each item has `id` and `text`.
+- `id` is a fixed code of the package. It matches the pattern of a reason code
+  ([5.2](#52-reason-codes)). It is unique in the plan.
+- `text` is one fixed sentence that tells the person what to arrange, for example "Turn on a lamp
+  in front of the cameras."
+- The plan of a quick run must have an empty `setups` list. A setup check runs only at the level
+  `full`.
+- The package must name in its documentation the setup that each setup check needs.
+- The app must show each setup as its own yes/no question, before the run. This question is not part
+  of the consent to the full run. A yes to the full run is not a yes to a setup.
+- `certify()` and `certify_plan()` of each package must accept the keyword-only option
+  `setups=None`: a list of the `id` of each setup that the person accepted. `None` or an empty
+  list means that the person accepted no setup. With this option, `total` and `seconds_estimate`
+  of the plan count only the checks that will run. The `setups` list of the plan still holds each
+  setup of the level.
+- A setup check whose setup is not in the list does not run. It gets the result `not-run` with the
+  reason `not-selected` ([5.3](#53-common-reason-codes)).
+- A declined setup does not make the run `partial-run` ([7.1](#71-validity)). The other checks of
+  the run still count as evidence.
+- A roll-up check that requires a setup check that did not run is not `pass` ([3.4](#34-check)). So
+  a summary item whose `gate` is that roll-up check gives no reviewed row
+  ([7.2](#72-kinds-of-evidence)). When the other checks of the item passed, the item is `partial`
+  ([3.7](#37-summary)).
+
 ### 2.7 The two levels
+
+**Aims.** The two levels have different aims
+([ADR-TWK1](decisions/entries/TWK1-when-a-check-can-exist-and-the-aims-of-the-levels.md)):
+
+- The level `quick` is a smoke test. It shows whether things work at all.
+- The level `full` shows how well things perform. It finds gaps in the logic and records the
+  errors. Its result either signs off the use of this path in production, or it gives a developer
+  the information to fix the issues in a later release.
+
+[5.6](#56-when-a-check-can-exist-and-its-level) tells which checks can exist and the level of each
+check.
 
 **Level `quick`.** A package must obey these three rules:
 
@@ -287,15 +333,19 @@ that a package would check is already reviewed, its quick run checks nothing. Th
 quick run. The app must not ask the person to run the quick check when no package has a check to
 run, that is when the `total` of each plan is 0 ([2.6](#26-the-plan-function)).
 
-**Level `full`.** The level `full` is open for now. It is for benchmarks of unknown things and of
-this system. It can also check a known-good item, to measure the performance of this system. It can
-download test files. It can download only the files that its plan names, with the consent of the
-user ([2.6](#26-the-plan-function)). It can take longer on the system. It can run full benchmarks.
-The owner can make these rules tighter later.
+**Level `full`.** The level `full` has few fixed rules: the rules of
+[5.6](#56-when-a-check-can-exist-and-its-level) and the order rule below. It is for benchmarks of
+unknown things and of this system. It can also check a known-good item, to measure the performance
+of this system. It can download test files. It can download only the files that its plan names,
+with the consent of the user ([2.6](#26-the-plan-function)). It can take longer on the system. It
+can run full benchmarks. The owner can make these rules tighter later.
 
-The format has no rule for the order of the tests. We recommend this order: first the tests of most
-value and the tests of new things, then the tests of less value. A run that stops early then still
-gives the important results.
+**Order of the checks.** The format has one rule for the order. A check that can block a device
+must run after the safe checks. A check can block a device when the plan names that risk in `risks`
+([2.6](#26-the-plan-function)). A safe check cannot block a device. The rest of the order is a
+recommendation: first the tests of most value and the tests of new things, then the tests of less
+value. A run that stops early then still gives the important results
+([ADR-TWK1](decisions/entries/TWK1-when-a-check-can-exist-and-the-aims-of-the-levels.md)).
 
 ### 2.8 The test media folder
 
@@ -329,7 +379,7 @@ outside the data of each package.
 
 | Field | Type | Required | Meaning |
 |---|---|---|---|
-| `schema` | string | yes | `skellycertify.report/1.7.0` ([section 8](#8-versioning-of-the-format)). |
+| `schema` | string | yes | `skellycertify.report/1.8.0` ([section 8](#8-versioning-of-the-format)). |
 | `id` | string | no | A version 4 UUID in the lower-case form with hyphens (36 characters), for example `3f2b8c1e-9a4d-4e7b-b6a1-0c5d2e8f7a90`. The package gives it when it saves the report. It is unique in a report file. It holds no time and no data of the system. A version 1 UUID is forbidden, because it holds the MAC address. A report that was not saved can have no `id`. |
 | `package` | object | yes | See [3.2](#32-package). |
 | `kind` | string | yes | `quick`, `full` or `passive` ([7.2](#72-kinds-of-evidence)). `passive` is reserved for a record that the package gathers from normal use ([7.3](#73-the-passive-record-reserved)). Its fields are not yet defined. A writer must not write `passive` in this version. |
@@ -536,7 +586,7 @@ reviewed. A pair that has a reviewed pass does not run. It gets an `ep` item `sk
 
 ```json
 {
- "schema": "skellycertify.report/1.7.0",
+ "schema": "skellycertify.report/1.8.0",
  "id": "3f2b8c1e-9a4d-4e7b-b6a1-0c5d2e8f7a90",
  "package": {"name": "skellytracker", "version": "2024.9.1019",
              "commit": "0123456789abcdef0123456789abcdef01234567", "tree_modified": false},
@@ -740,7 +790,7 @@ One report file holds one JSON object:
 
 | Field | Meaning |
 |---|---|
-| `schema` | `skellycertify.report/1.7.0`. |
+| `schema` | `skellycertify.report/1.8.0`. |
 | `app` | `name`, `version` (SemVer) and `commit` of the app, or `null` for a report of one package that ran alone. |
 | `modules` | A list of module reports. The list holds at least one module report. A package can give more than one module report, for example one for each run. Each module report is independent ([7.1](#71-validity)). |
 | `note` | The one free-text note of the person, or `null`. At most 2000 characters. It must be a clean note (rule 18 of [section 6](#6-privacy-rules)). |
@@ -944,17 +994,17 @@ Note of the person:
 
 ```json
 {
- "schema": "skellycertify.report/1.7.0",
+ "schema": "skellycertify.report/1.8.0",
  "app": {"name": "freemocap", "version": "2.0.0", "commit": "89abcdef0123456789abcdef0123456789abcdef"},
  "modules": [
-  {"schema": "skellycertify.report/1.7.0", "package": {"name": "skellytracker", "...": "..."},
+  {"schema": "skellycertify.report/1.8.0", "package": {"name": "skellytracker", "...": "..."},
    "summary": [
     {"group": "ep", "name": "CUDA", "device": "10de:2484", "result": "skipped", "reason": "reviewed"},
     {"group": "ep", "name": "DirectML", "device": "10de:2484", "result": "pass"},
     {"group": "ep", "name": "CPU", "device": null, "result": "record-only"},
     {"group": "component", "name": "MediaPipe", "device": null, "result": "skipped", "reason": "reviewed"}
    ]},
-  {"schema": "skellycertify.report/1.7.0", "package": {"name": "skellycam", "...": "..."},
+  {"schema": "skellycertify.report/1.8.0", "package": {"name": "skellycam", "...": "..."},
    "summary": [
     {"group": "camera", "name": "Logitech C922", "device": "046d:085c", "result": "partial"},
     {"group": "camera", "name": "Razer Kiyo Pro", "device": "1532:0e05", "result": "skipped", "reason": "busy"}
@@ -1017,7 +1067,7 @@ This format owns these codes. Each package must use them with this meaning.
 | `no-version` | `evidence.reasons` | `package.version` is not a SemVer version. |
 | `no-commit` | `evidence.reasons` | `package.commit` is `null` or not 40 hex digits. |
 | `modified-tree` | `evidence.reasons` | `package.tree_modified` is not `false`. |
-| `partial-run` | `evidence.reasons` | Not all checks of the level were selected. |
+| `partial-run` | `evidence.reasons` | Not all checks of the level were selected. A setup that the person declined does not count ([2.6](#26-the-plan-function), "Setups"). |
 | `kind-not-evidence` | `evidence.reasons` | The `kind` is `passive`. This version does not define the fields of a `passive` record. |
 | `commit-not-public` | the answer of the reviewer | `package.commit` is not in the public repository of the package. The reviewer gives this code on the issue. It is not in the report file. |
 
@@ -1041,6 +1091,8 @@ approval of the owner of this repository
 **A new check.** The package owns the name of each of its checks. This repository holds no list of
 check names.
 
+- The check obeys [5.6](#56-when-a-check-can-exist-and-its-level): when a check can exist, and its
+  level.
 - The package defines the name of the check in its own specification or documentation. It does
   this in the same commit that adds the check.
 - The name matches the pattern of a check name ([3.4](#34-check)). The pair (`section`, `name`) is
@@ -1082,6 +1134,51 @@ value, the same change updates the relay and its tests (`relay/src/report.js`,
 **How to ask.** The package (its maintainer or its agent) asks the owner of this repository for the
 change. The request gives the field or the value, its type, its place in the report and one
 example. The owner of this repository approves each change of the format.
+
+### 5.6 When a check can exist, and its level
+
+This section adds to [5.5](#55-how-a-package-adds-a-check). It tells when a package can create a
+check, and at which level the check runs
+([ADR-TWK1](decisions/entries/TWK1-when-a-check-can-exist-and-the-aims-of-the-levels.md)).
+
+**When a check can exist.** A package can create a check only when each of these statements is
+true:
+
+1. The answer can be different on a different system or hardware. When the answer is the same on
+   each system, the test is a normal test of the test suite of the package (CI). It is not a
+   certify check.
+2. The answer changes something: a verdict, a notice to the person
+   ([3.8](#38-notices)), or what a developer fixes.
+3. The check runs the code path of the product. It does not run a second implementation.
+4. The check can ask the person for a specific setup, for example a certain light or a plug moved.
+   It can ask only after a second opt-in of the person ([2.6](#26-the-plan-function), "Setups").
+   When the person does not say yes, the check does not run.
+5. The check cannot spoil the run. It has a time limit ([2.5](#25-runtime-rules), "Time limits"). A
+   failure gives a reason code, never a crash of the run. The check puts back each thing that it
+   changed.
+6. Its result holds no private data, and it fits the format: fixed words, numbers and reason codes
+   ([section 6](#6-privacy-rules)).
+7. The check is in the specification of the package, with its test, before the code of the check
+   exists. The specification gives the name, the pass rule or `record-only`, the numbers and the
+   reason codes.
+8. A `record-only` check names in the specification of the package the question that it will
+   answer. The specification also names what turns it into a judged check, or what removes it.
+
+**The level of a check.**
+
+1. A check is at the level `quick` only when each of these statements is true:
+   - It answers "does this work at all" ([2.7](#27-the-two-levels), "Aims").
+   - It cannot block a device: it adds nothing to `risks` ([2.6](#26-the-plan-function)).
+   - It downloads nothing.
+   - It fits in the part of the 2 minutes of [2.7](#27-the-two-levels) that the package uses.
+   - It needs no setup from the person.
+2. Each other check is at the level `full`.
+3. A check that can block a device runs at the level `full`, after the safe checks
+   ([2.7](#27-the-two-levels), "Order of the checks").
+4. A check with no pass rule is `record-only` at each level.
+5. An experimental method is a method whose answer is not yet verified on that system. Its check
+   runs only at the level `full`. The package puts it where its failure cannot spoil the rest of
+   the run. The check reports its own result.
 
 ## 6. Privacy rules
 
@@ -1207,7 +1304,9 @@ A module report is valid as evidence only when each of these statements is true:
 2. `package.commit` is 40 lower-case hex digits. Else the reason is `no-commit`.
 3. `package.tree_modified` is `false`. Else the reason is `modified-tree`. A module with
    `tree_modified: true` is a record only, because no commit identifies its source.
-4. The run selected each check of its level. Else the reason is `partial-run`.
+4. The run selected each check of its level. Else the reason is `partial-run`. A setup check that
+   did not run because the person declined its setup does not make the run `partial-run`
+   ([2.6](#26-the-plan-function), "Setups").
 5. The run went to its end: the caller did not cancel it, the package did not refuse it, and the
    process did not end early. Else the reason is `cancelled`, `gpu-busy`, `cameras-busy` or
    `interrupted`. A cancelled run is not evidence.
@@ -1282,6 +1381,22 @@ the capture backend and the OS. Camera evidence is not part of an EP row.
 
 Changes of the format:
 
+- 1.8.0: The plan can have the optional list `setups`. Each item has `id` and `text`. The plan of a
+  quick run has an empty list. `certify()` and `certify_plan()` of each package accept the
+  keyword-only option `setups`: the `id` of each setup that the person accepted. The app asks one
+  yes/no question for each setup, apart from the consent to the full run. A setup check whose setup
+  is not in the list is `not-run` with `not-selected`. A declined setup does not make the run
+  `partial-run`. A roll-up check that requires a setup check that did not run is not `pass`, so its
+  summary item gives no reviewed row ([2.2](#22-arguments), [2.6](#26-the-plan-function),
+  [5.3](#53-common-reason-codes), [7.1](#71-validity)). This is a minor change: it adds an optional
+  field of the plan and an option, as `abandon` did in 1.6.0. It adds no field of the report and no
+  reason code. A reader of major version 1 still accepts a file of 1.7.0 or earlier
+  ([ADR-974S](decisions/entries/974S-format-1-8-0-second-opt-in-for-a-setup.md)).
+  These changes of the text are also in 1.8.0. They change no field, no allowed value and no check
+  of the relay: the aims of the two levels and the one rule for the order of the checks
+  ([2.7](#27-the-two-levels)), and the new [5.6](#56-when-a-check-can-exist-and-its-level), which
+  tells when a package can create a check and at which level it runs
+  ([ADR-TWK1](decisions/entries/TWK1-when-a-check-can-exist-and-the-aims-of-the-levels.md)).
 - 1.7.0: The `name` of an item of `test_media` is exempt from rule 7 of
   [section 6](#6-privacy-rules) ([3.9](#39-test_media)). Each other rule still applies to it. This
   is a minor change. The change does not fix text: a `name` that ends with `.mp4` was invalid
@@ -1378,7 +1493,7 @@ These are the only packages of this format.
 
 | Package | Evidence for | `certify()` | Reason codes | Evidence rows |
 |---|---|---|---|---|
-| skellytracker | execution providers (EPs) | `skellytracker.certify` and `skellytracker.certify_plan`, levels `quick` and `full`. Package options: `execution_providers`, `pipeline`. The tool `tools/certify_platform.py` writes a report file of this format (schema 1.7.0; see [3.6](#36-example-skellytracker)). | `skellytracker/REASON_CODES.md` | `skellytracker/core/eps/ep_evidence.yaml` (EPs); this repository for the other sections |
+| skellytracker | execution providers (EPs) | `skellytracker.certify` and `skellytracker.certify_plan`, levels `quick` and `full`. Package options: `execution_providers`, `pipeline`. The tool `tools/certify_platform.py` writes a report file of this format (schema 1.8.0; see [3.6](#36-example-skellytracker)). | `skellytracker/REASON_CODES.md` | `skellytracker/core/eps/ep_evidence.yaml` (EPs); this repository for the other sections |
 | freemocap | the app on an OS: it starts a child process, loads its bundled modules and can write its data folder | `freemocap.certify` and `freemocap.certify_plan`, level `quick`. The level `full` is not built. Package options: `ui_remote`, `blender_exe_path`. | the docstring of `freemocap/certification.py` | none yet |
 | skellycam | cameras ([7.4](#74-camera-evidence)) | not yet implemented | not yet implemented | not yet implemented |
 
