@@ -1648,8 +1648,8 @@ These are the only packages of this format.
 | skellycam | cameras ([7.4](#74-camera-evidence)) | not yet implemented | not yet implemented | not yet implemented |
 
 The place of the list of check names of each package ([5.7](#57-the-list-of-check-names-of-a-package)):
-skellycam has it in `specs/certify.md` (the list is being built there). The place for skellytracker
-and for freemocap is not yet defined.
+skellycam has it in `specs/certify.md` (the list is being built there). skellytracker has it in
+`skellytracker/core/eps/certify_checks.yaml`. The place for freemocap is not yet defined.
 
 The public repository of skellytracker is `https://github.com/domisjustanumber/skellytracker` for
 now. The public repository of freemocap is `https://github.com/domisjustanumber/freemocap` for
