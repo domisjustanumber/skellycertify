@@ -718,7 +718,7 @@ person ([4.2](#42-layout)). It is not the `summary` of a section ([3.5](#35-sect
 |---|---|
 | `group` | `ep`, `gpu-jpeg`, `camera`, `benchmark` or `component`. |
 | `name` | A short fixed name from the vocabulary of the package, for example `TensorRT RTX`, `CUDA`, `DirectML` or `CPU`. For a camera, the camera name of rule 16 of [section 6](#6-privacy-rules), for example `Logitech C922` ([ADR-6C0M](decisions/entries/6C0M-sources-of-a-camera-name.md)). For `benchmark`, the tested part, as for `ep`. For `component`, the name of the component, for example `MediaPipe`. |
-| `device` | For `ep`, `gpu-jpeg` and `benchmark`: the `id` of the GPU in `host.gpus`. For a PCI device this is `vvvv:dddd`. For `camera`: the USB id `vvvv:pppp`. For `component`: always `null`. Else `null`. |
+| `device` | For `ep`, `gpu-jpeg` and `benchmark`: the `id` of the GPU in `host.gpus`. For a PCI device this is `vvvv:dddd`. For `camera`: the USB id `vvvv:pppp`, or `null` for a camera with no USB id (its name is `Camera (no USB id)`). For `component`: always `null`. Else `null`. |
 | `result` | Not for `benchmark`. `pass`, `fail`, `record-only`, `partial` or `skipped`. |
 | `reason` | Not for `benchmark`. For `skipped`: `busy`, `reviewed` or `declined`, and for a `component` item also `not-installed`. For each other result: absent or `null`. |
 | `gate` | Optional. Only for `ep`, `gpu-jpeg`, `camera` and `component`. The `name` of one roll-up check ([3.4](#34-check)) of the same module report, for example `046d-085c:gate` for a camera. It matches the pattern of a check name. The relay refuses another form. The package names it. [7.2](#72-kinds-of-evidence) tells what it gives ([ADR-T191](decisions/entries/T191-gate-of-a-summary-item.md)). |
@@ -1515,7 +1515,9 @@ Changes of the format:
   of the relay: the two aims of both levels ([2.7](#27-the-two-levels)), the exact count of `total`
   ([2.6](#26-the-plan-function)) and the new [5.8](#58-what-a-check-writes), which tells what a
   check writes
-  ([ADR-ZW66](decisions/entries/ZW66-what-a-check-writes-and-the-aims-of-both-levels.md)).
+  ([ADR-ZW66](decisions/entries/ZW66-what-a-check-writes-and-the-aims-of-both-levels.md)) A `camera`
+  item of a camera with no USB id has `device` `null` ([3.7](#37-summary))
+  ([ADR-D249](decisions/entries/D249-device-null-for-a-camera-with-no-usb-id.md)).
 - 1.9.0: An `ep`, `gpu-jpeg`, `camera` or `component` summary item can have `skipped` with the new
   reason `declined`, shown as `skipped (declined)`. It tells that the person declined each setup
   that the checks of the item need, so no check of the item ran ([2.6](#26-the-plan-function),

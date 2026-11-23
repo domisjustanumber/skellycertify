@@ -136,7 +136,8 @@ task. Delete an item when its work is done. The PR that closes an item records t
   [section 6](../report-format.md#6-privacy-rules) that applies: the list of known cameras of
   skellycam (keyed by USB vendor id and product id), a fixed class text for a personal device (also
   a camera whose product text holds a personal-device word), the USB product string through the
-  filter of the rule, `Camera (no USB id)`, or `Camera vvvv:pppp`. Keep the list of
+  filter of the rule, `Camera (no USB id)`, or `Camera vvvv:pppp`. A camera with no USB id has `device` `null`
+  ([ADR-D249](entries/D249-device-null-for-a-camera-with-no-usb-id.md)). Keep the list of
   personal-device words and their class texts in the documentation of skellycam.
   Never use a display name that the OS or a person can set. Use
   `partial` and `skipped` with `busy` for a camera. Refuse the run with `cameras-busy` when skellycam
