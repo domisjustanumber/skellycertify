@@ -32,16 +32,6 @@ task. Delete an item when its work is done. The PR that closes an item records t
   ([3.8](../report-format.md#38-notices)). Show the `risks` of each plan at the consent. Do not
   offer a run of a level when the `total` of each plan is 0
   ([2.6](../report-format.md#26-the-plan-function)).
-- **skellytracker: `over-budget` ([ADR-V1TR](entries/V1TR-format-1-4-0.md)).** Give a check that
-  did not run because the time limit of the level was used up the result `not-run` with
-  `over-budget` ([5.3](../report-format.md#53-common-reason-codes)).
-- **skellytracker: the `component` item of MediaPipe ([ADR-VV80](entries/VV80-format-1-5-0.md)).**
-  For the check `mediapipe:smoke`, write a `component` item `MediaPipe` with `device` `null`
-  ([3.6](../report-format.md#36-example-skellytracker), [3.7](../report-format.md#37-summary)). When
-  `quick` skips the check because it has a reviewed pass, give the item the result `skipped` with
-  `reviewed`. In `tools/certify_platform.py`, print the component table of
-  [4.2](../report-format.md#42-layout) part 6, and print a four-part number in a value as rule 20 of
-  [section 6](../report-format.md#6-privacy-rules) says.
 - **freemocap: the app side of format 1.5.0 ([ADR-VV80](entries/VV80-format-1-5-0.md)).** Write a
   `component` item with `device` `null` for each check of the own module of the app: build identity,
   child process, imports, data folder, install facts and Blender
@@ -92,11 +82,6 @@ task. Delete an item when its work is done. The PR that closes an item records t
   ([2.7](../report-format.md#27-the-two-levels), "Order of the checks"). Name in the specification
   of the package the question of each `record-only` check, and what turns it into a judged check or
   removes it.
-- **skellytracker: the GPU memory and the bundled test media
-  ([ADR-9FHP](entries/9FHP-format-1-6-0.md)).** Write `shared_memory_bytes` in each item of
-  `host.gpus` ([3.3](../report-format.md#33-host)). When the test media folder does not hold a
-  file, use the bundled copy and write `source` `bundled`
-  ([2.8](../report-format.md#28-the-test-media-folder)).
 - **freemocap: the app side of format 1.6.0 ([ADR-9FHP](entries/9FHP-format-1-6-0.md)).** Set
   `abandon` for a package process that has no caller after the backend ended early
   ([2.4](../report-format.md#24-cancel)). Give the `component` item of Blender the result `skipped`
