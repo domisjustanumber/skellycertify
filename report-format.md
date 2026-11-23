@@ -1120,6 +1120,24 @@ Allowed facts: model names of a CPU, a GPU or a camera, PCI vendor and device id
 product ids, driver and package versions, the OS label, and test results. These facts identify a
 model, not one unit.
 
+One exception: the local unit id of a camera. It lets a developer compare two runs of the same
+camera unit on one system.
+
+- The id has at most 8 lower-case hex digits. The writer makes it with a keyed hash (for example
+  HMAC-SHA256) of a value that identifies the unit on that system. The key is random. It stays in a
+  local file on the system and is never in a report. So the id has no meaning on another system,
+  and two systems give different ids for the same camera.
+- The id is `null` when the package cannot use the key. The person can delete the key file. The next
+  run then gives new ids.
+- The id is only in `details` of a module report of a package that checks cameras. skellycam writes
+  `details.cameras[].unit_id`. The id is not in `summary`, not in a check name and not in the
+  Markdown part.
+- The serial number, the device path and the camera id of the OS stay forbidden. Rule 2 and the
+  other rules of this section do not change.
+- The relay cannot check where the id comes from. The writer must make it as this paragraph says.
+  The reviewer checks the form of the id and its place
+  ([ADR-YHW7](decisions/entries/YHW7-camera-unit-id-allowed-fact.md)).
+
 ## 7. Evidence validity
 
 ### 7.1 Validity
@@ -1212,6 +1230,10 @@ Changes of the format:
   owner decided that a new allowed value is a minor step. A reader of 1.6.0 refuses such a
   report, so the schema id must tell the two apart. A reader of major version 1 still accepts a
   file of 1.6.0 or earlier ([ADR-Q02Y](decisions/entries/Q02Y-test-media-name-exempt-from-rule-7.md)).
+  The list of allowed facts in [section 6](#6-privacy-rules) also names the local unit id of a
+  camera (`details.cameras[].unit_id`). This is a patch change inside 1.7.0: it fixes the text of
+  this document and changes no field, no rule and no check of the relay. The schema id stays 1.7.0
+  ([ADR-YHW7](decisions/entries/YHW7-camera-unit-id-allowed-fact.md)).
 - 1.6.0: `certify()` accepts the keyword-only option `abandon`. When it is set, the run stops as
   for a cancel, and the package stores no result and writes no report file. `abandon` applies when
   `cancel` is also set ([2.4](#24-cancel)). A `component` summary item can have `skipped` with the
