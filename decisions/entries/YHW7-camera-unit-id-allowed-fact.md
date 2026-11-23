@@ -1,6 +1,7 @@
 # YHW7 — The local unit id of a camera is an allowed fact
 
-**Status:** absorbed into [`report-format.md` 6](../../report-format.md#6-privacy-rules),
+**Status:** superseded by [6GAN](6GAN-no-unit-id-of-a-camera.md), 2026-11-23 (direct commit to
+`main`). Absorbed into [`report-format.md` 6](../../report-format.md#6-privacy-rules),
 [8](../../report-format.md#8-versioning-of-the-format), 2026-11-23 (direct commit to `main`).
 Accepted 2026-11-23 (owner).
 

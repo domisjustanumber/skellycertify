@@ -638,7 +638,7 @@ person ([4.2](#42-layout)). It is not the `summary` of a section ([3.5](#35-sect
 | Field | Meaning |
 |---|---|
 | `group` | `ep`, `gpu-jpeg`, `camera`, `benchmark` or `component`. |
-| `name` | A short fixed name from the vocabulary of the package, for example `TensorRT RTX`, `CUDA`, `DirectML` or `CPU`. For a camera, the camera model, for example `Logitech C922`. For `benchmark`, the tested part, as for `ep`. For `component`, the name of the component, for example `MediaPipe`. |
+| `name` | A short fixed name from the vocabulary of the package, for example `TensorRT RTX`, `CUDA`, `DirectML` or `CPU`. For a camera, the camera name of rule 16 of [section 6](#6-privacy-rules), for example `Logitech C922` ([ADR-6C0M](decisions/entries/6C0M-sources-of-a-camera-name.md)). For `benchmark`, the tested part, as for `ep`. For `component`, the name of the component, for example `MediaPipe`. |
 | `device` | For `ep`, `gpu-jpeg` and `benchmark`: the `id` of the GPU in `host.gpus`. For a PCI device this is `vvvv:dddd`. For `camera`: the USB id `vvvv:pppp`. For `component`: always `null`. Else `null`. |
 | `result` | Not for `benchmark`. `pass`, `fail`, `record-only`, `partial` or `skipped`. |
 | `reason` | Not for `benchmark`. For `skipped`: `busy` or `reviewed`, and for a `component` item also `not-installed`. For each other result: absent or `null`. |
@@ -1032,6 +1032,57 @@ Each package owns its other reason codes. This repository does not own them.
 - The package must add a code to the list in the same commit that adds the code to its checks.
 - [Section 9](#9-packages) gives the place of the list of each package.
 
+### 5.5 How a package adds a check
+
+A package can add a check with no change of this repository. A change of the format needs the
+approval of the owner of this repository
+([ADR-98KC](decisions/entries/98KC-how-a-package-adds-a-check.md)).
+
+**A new check.** The package owns the name of each of its checks. This repository holds no list of
+check names.
+
+- The package defines the name of the check in its own specification or documentation. It does
+  this in the same commit that adds the check.
+- The name matches the pattern of a check name ([3.4](#34-check)). The pair (`section`, `name`) is
+  unique in the module report.
+- The check is one test ([3.4](#34-check), "One test, one check").
+- The package names in its documentation the checks that each roll-up check requires
+  ([3.4](#34-check), "Roll-up check").
+- A `gate` of a summary item names a roll-up check ([3.7](#37-summary)).
+- The relay checks only the form of a check name.
+
+**A new code of the package.** A new reason code or notice code of the package follows
+[5.4](#54-codes-of-a-package). The package adds it to the list in its own repository, in the same
+commit. This repository does not change.
+
+**A new fact of the package.** A package writes a fact that has no field in this format in
+`details` ([3.1](#31-fields), [3.5](#35-section)) or in `numbers` of a check ([3.4](#34-check)). The
+fact obeys the privacy rules of [section 6](#6-privacy-rules). Each other new field and each new
+allowed value of a field is a change of the format. A package must not write it before this format
+defines it. A reader ignores a field that it does not know ([3.1](#31-fields)). That rule is for a
+reader. It does not let a writer add a field.
+
+**A change of this repository.** These changes need a change of this document:
+
+- a new common reason code ([5.3](#53-common-reason-codes));
+- a new field;
+- a new allowed value of a field;
+- a new summary group ([3.7](#37-summary));
+- a new reason of a `skipped` summary item ([3.7](#37-summary));
+- a change of a privacy rule or of the allowed facts ([section 6](#6-privacy-rules)).
+
+[Section 8](#8-versioning-of-the-format) gives the step of the version. A change that adds an
+optional field, a common reason code or an allowed value is a minor change. A change that removes
+or renames a field, changes the meaning of a field, or makes an optional field required is a major
+change. Each change of the format has a decision entry in this
+repository ([decisions/README.md](decisions/README.md)). When the relay checks the field or the
+value, the same change updates the relay and its tests (`relay/src/report.js`,
+`relay/src/privacy.js`), and the relay is deployed.
+
+**How to ask.** The package (its maintainer or its agent) asks the owner of this repository for the
+change. The request gives the field or the value, its type, its place in the report and one
+example. The owner of this repository approves each change of the format.
+
 ## 6. Privacy rules
 
 Each rule is a statement that a test can check. "String" means each key and each value of the
@@ -1074,10 +1125,29 @@ These rules apply to the writer. A test of the writer can check them. A reviewer
     output of an OS tool.
 15. Before the person writes the note, the writer tells the person not to write a name, contact
     details or other personal details.
-16. A camera name holds no name of a person. The package that writes the name takes it from the
-    model string of the device. The package removes the name of a person before the report exists.
-    For example, `<name>'s iPhone Camera` becomes `iPhone Camera`. The relay cannot find a first
-    name, so this rule is a duty of the writer.
+16. A camera name holds no name of a person. The package that writes the name sets it before the
+    report exists. It uses the first of these sources that applies
+    ([ADR-6C0M](decisions/entries/6C0M-sources-of-a-camera-name.md)):
+    1. The name in the list of known cameras of the package. The key of the list is the USB vendor
+       id and the product id of the camera.
+    2. For a camera that is not in the list: the product text in the firmware of the camera (the
+       USB product string). The package never uses a display name that the OS or a person can set.
+       The package changes the product text with this filter:
+       - It applies the Unicode normalization NFKC.
+       - It keeps only letters, marks and digits of each script (the Unicode categories L, M and
+         N), the space (U+0020) and the characters of rule 18. It replaces each other character
+         with a space. So no control character of the text direction stays.
+       - It replaces each run of spaces with one space, and it removes the spaces at the start and
+         at the end.
+       - It keeps at most 60 characters.
+    3. For a personal device that a person uses as a camera: a fixed text for the class of the
+       device, for example `iPhone used as camera`, `iPad used as camera` or `Mac built-in camera`.
+    4. For a camera with no USB id: `Camera (no USB id)`.
+    5. When a rule of this section refuses the name of sources 1 to 4: `Camera vvvv:pppp`, with the
+       USB vendor id and the product id in lower-case hex, for example `Camera 046d:085c`. A product
+       text that holds the user name or the host name of the system is refused (rule 12).
+
+    The relay cannot find a first name, so this rule is a duty of the writer.
 
 The writer must also make these statements true. The relay checks them, and the reviewer checks
 them again:
@@ -1118,25 +1188,9 @@ reviewer and a fast removal of the file are the defence ([review.md](review.md) 
 
 Allowed facts: model names of a CPU, a GPU or a camera, PCI vendor and device ids, USB vendor and
 product ids, driver and package versions, the OS label, and test results. These facts identify a
-model, not one unit.
-
-One exception: the local unit id of a camera. It lets a developer compare two runs of the same
-camera unit on one system.
-
-- The id has at most 8 lower-case hex digits. The writer makes it with a keyed hash (for example
-  HMAC-SHA256) of a value that identifies the unit on that system. The key is random. It stays in a
-  local file on the system and is never in a report. So the id has no meaning on another system,
-  and two systems give different ids for the same camera.
-- The id is `null` when the package cannot use the key. The person can delete the key file. The next
-  run then gives new ids.
-- The id is only in `details` of a module report of a package that checks cameras. skellycam writes
-  `details.cameras[].unit_id`. The id is not in `summary`, not in a check name and not in the
-  Markdown part.
-- The serial number, the device path and the camera id of the OS stay forbidden. Rule 2 and the
-  other rules of this section do not change.
-- The relay cannot check where the id comes from. The writer must make it as this paragraph says.
-  The reviewer checks the form of the id and its place
-  ([ADR-YHW7](decisions/entries/YHW7-camera-unit-id-allowed-fact.md)).
+model, not one unit. There is no exception. A report holds no fact that identifies one camera
+unit: no unit id, no serial number, no device path and no camera id of the OS
+([ADR-6GAN](decisions/entries/6GAN-no-unit-id-of-a-camera.md)).
 
 ## 7. Evidence validity
 
@@ -1230,10 +1284,22 @@ Changes of the format:
   owner decided that a new allowed value is a minor step. A reader of 1.6.0 refuses such a
   report, so the schema id must tell the two apart. A reader of major version 1 still accepts a
   file of 1.6.0 or earlier ([ADR-Q02Y](decisions/entries/Q02Y-test-media-name-exempt-from-rule-7.md)).
-  The list of allowed facts in [section 6](#6-privacy-rules) also names the local unit id of a
-  camera (`details.cameras[].unit_id`). This is a patch change inside 1.7.0: it fixes the text of
-  this document and changes no field, no rule and no check of the relay. The schema id stays 1.7.0
-  ([ADR-YHW7](decisions/entries/YHW7-camera-unit-id-allowed-fact.md)).
+  These are patch changes inside 1.7.0. Each fixes the text of this document and changes no field,
+  no allowed value and no check of the relay. The schema id stays 1.7.0:
+  - The list of allowed facts in [section 6](#6-privacy-rules) named the local unit id of a camera
+    (`details.cameras[].unit_id`) as an exception
+    ([ADR-YHW7](decisions/entries/YHW7-camera-unit-id-allowed-fact.md)). The owner removed the
+    exception on the same day, before a package wrote the id. The allowed facts identify a model,
+    not one unit, with no exception
+    ([ADR-6GAN](decisions/entries/6GAN-no-unit-id-of-a-camera.md)).
+  - Rule 16 of [section 6](#6-privacy-rules) gives the sources of a camera name, in order: the list
+    of known cameras of the package, the USB product string through a filter, a fixed class text
+    for a personal device, `Camera (no USB id)` and `Camera vvvv:pppp`. The name never comes from a
+    display name that the OS or a person can set
+    ([ADR-6C0M](decisions/entries/6C0M-sources-of-a-camera-name.md)).
+  - The new [5.5](#55-how-a-package-adds-a-check) tells how a package adds a check, and which
+    changes need a change of this document. The owner of this repository approves each change of
+    the format ([ADR-98KC](decisions/entries/98KC-how-a-package-adds-a-check.md)).
 - 1.6.0: `certify()` accepts the keyword-only option `abandon`. When it is set, the run stops as
   for a cancel, and the package stores no result and writes no report file. `abandon` applies when
   `cancel` is also set ([2.4](#24-cancel)). A `component` summary item can have `skipped` with the

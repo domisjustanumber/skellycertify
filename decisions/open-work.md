@@ -58,11 +58,6 @@ task. Delete an item when its work is done. The PR that closes an item records t
   that the checks used ([3.9](../report-format.md#39-test_media)). They must write the schema id
   `skellycertify.report/1.7.0`, not `skellycertify.report/1.5.0`, when they write the rules of
   format 1.6.0 and 1.7.0 ([ADR-Q02Y](entries/Q02Y-test-media-name-exempt-from-rule-7.md)).
-- **skellycam: write the local unit id of a camera
-  ([ADR-YHW7](entries/YHW7-camera-unit-id-allowed-fact.md)).** Write `details.cameras[].unit_id` as
-  [section 6](../report-format.md#6-privacy-rules) states: at most 8 lower-case hex digits from a
-  keyed hash, a random key in a local file that is never in a report, and `null` when the key is not
-  usable. Do not write the id in `summary`, in a check name or in the Markdown part.
 - **skellytracker: the GPU memory and the bundled test media
   ([ADR-9FHP](entries/9FHP-format-1-6-0.md)).** Write `shared_memory_bytes` in each item of
   `host.gpus` ([3.3](../report-format.md#33-host)). When the test media folder does not hold a
@@ -87,10 +82,14 @@ task. Delete an item when its work is done. The PR that closes an item records t
   names of [4.2](../report-format.md#42-layout) in `tools/certify_platform.py`.
 - **skellycam: write the `camera` items
   ([ADR-F1KN](entries/F1KN-format-1-2-0-markdown-layout-revised.md),
-  [ADR-D1PW](entries/D1PW-format-1-3-0.md)).** When skellycam has checks of this format, fill
-  `summary` with one `camera` item for each camera model, not for each unit
-  ([3.7](../report-format.md#37-summary)). Take the name from the model string of the device.
-  Remove the name of a person (rule 16 of [section 6](../report-format.md#6-privacy-rules)). Use
+  [ADR-D1PW](entries/D1PW-format-1-3-0.md),
+  [ADR-6C0M](entries/6C0M-sources-of-a-camera-name.md)).** When skellycam has checks of this
+  format, fill `summary` with one `camera` item for each camera model, not for each unit
+  ([3.7](../report-format.md#37-summary)). Take the name from the first source of rule 16 of
+  [section 6](../report-format.md#6-privacy-rules) that applies: the list of known cameras of
+  skellycam (keyed by USB vendor id and product id), the USB product string through the filter of
+  the rule, a fixed class text for a personal device, `Camera (no USB id)`, or `Camera vvvv:pppp`.
+  Never use a display name that the OS or a person can set. Use
   `partial` and `skipped` with `busy` for a camera. Refuse the run with `cameras-busy` when skellycam
   cannot get the cameras ([2.5](../report-format.md#25-runtime-rules)). Give each camera item a
   `gate`: the name of the roll-up check of the native capture of that model, for example
